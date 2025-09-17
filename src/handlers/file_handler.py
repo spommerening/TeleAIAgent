@@ -17,29 +17,44 @@ class FileHandler:
         
     def handle_message(self, message):
         """Processes incoming files"""
+        logger.info(f"FileHandler called - Chat type: {message.chat.type}, Content type: {message.content_type}")
+        logger.info(f"FileHandler - Photo: {bool(message.photo)}, Document: {bool(message.document)}, Voice: {bool(message.voice)}, Video: {bool(message.video)}, Audio: {bool(message.audio)}")
+        
         if message.photo:
+            logger.info("FileHandler: Processing photo...")
             self._download_photos(message)
         elif message.document:
+            logger.info("FileHandler: Processing document...")
             self._download_documents(message)
         elif message.voice:
+            logger.info("FileHandler: Processing voice...")
             self._download_voice_messages(message)
         elif message.video or message.audio:
+            logger.info("FileHandler: Processing video/audio...")
             self._download_other_files(message)
+        else:
+            logger.info("FileHandler: No media files detected in this message")
     
     def _download_photos(self, message):
         """Downloads photos"""
-        logger.info(f"Photo message: {message.photo}")
+        logger.info(f"Downloading photo - Chat type: {message.chat.type}, Photo count: {len(message.photo)}")
         
         # Find largest photo
         largest_photo = max(message.photo, key=lambda x: (x.width, x.height))
         
         photo_id = largest_photo.file_id
-        file_info = self.bot.get_file(photo_id)
+        logger.info(f"Photo ID: {photo_id}")
         
-        file_path = os.path.join(Config.IMAGES_DIR, f"{photo_id}.jpg")
-        download_url = f"https://api.telegram.org/file/bot{self.bot_token}/{file_info.file_path}"
-        
-        self._download_file(download_url, file_path)
+        try:
+            file_info = self.bot.get_file(photo_id)
+            file_path = os.path.join(Config.IMAGES_DIR, f"{photo_id}.jpg")
+            download_url = f"https://api.telegram.org/file/bot{self.bot_token}/{file_info.file_path}"
+            
+            logger.info(f"Downloading to: {file_path}")
+            self._download_file(download_url, file_path)
+            logger.info(f"Photo download completed: {file_path}")
+        except Exception as e:
+            logger.error(f"Error downloading photo: {e}", exc_info=True)
     
     def _download_documents(self, message):
         """Downloads documents"""

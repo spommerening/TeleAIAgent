@@ -125,7 +125,7 @@ class TelegramBot:
         @self.bot.message_handler(content_types=['photo'])
         def handle_photos(message):
             try:
-                logger.info(f"Photo handler triggered - Photo count: {len(message.photo) if message.photo else 0}")
+                logger.info(f"Photo handler triggered - Chat type: {message.chat.type}, Photo count: {len(message.photo) if message.photo else 0}")
                 self.file_handler.handle_message(message)
                 self.text_handler.handle_message(message)  # Store context
             except Exception as e:
@@ -158,21 +158,26 @@ class TelegramBot:
             except Exception as e:
                 logger.error(f"Error processing media: {e}", exc_info=True)
 
-        # Finally register the general handler for text messages
-        @self.bot.message_handler(func=lambda message: True)
+        # Register handler specifically for text messages only
+        @self.bot.message_handler(content_types=['text'])
         def handle_text_messages(message):
             try:
-                logger.info(f"Text handler - Type: {message.content_type}, Text: {message.text}")
+                logger.info(f"Text handler - Chat type: {message.chat.type}, Text: {message.text}")
                 
                 # Only process text messages that are not commands
-                if message.content_type == 'text' and (not message.text or not message.text.startswith('/')):
+                if not message.text or not message.text.startswith('/'):
                     self.text_handler.handle_message(message)
-                elif message.content_type == 'text' and message.text and message.text.startswith('/'):
-                    logger.info(f"Command message handled by specific handler: {message.text}")
                 else:
-                    logger.info(f"Non-text message type {message.content_type} handled by specific handler")
+                    logger.info(f"Command message handled by specific handler: {message.text}")
             except Exception as e:
                 logger.error(f"Error processing text message: {e}", exc_info=True)
+        
+        # Catch-all handler for debugging unhandled message types
+        @self.bot.message_handler(func=lambda message: True)
+        def handle_unmatched_messages(message):
+            logger.warning(f"Unmatched message - Chat type: {message.chat.type}, Content type: {message.content_type}, Text: {message.text}")
+            logger.warning(f"Photo: {bool(message.photo)}, Document: {bool(message.document)}, Voice: {bool(message.voice)}")
+            # This should not normally be reached if other handlers work correctly
                 
     def _setup_signal_handlers(self):
         """Sets up signal handlers for graceful shutdown"""
