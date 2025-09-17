@@ -1,0 +1,33 @@
+# Environment files
+.env
+
+# Volume directories - ignore all content except placeholders (recursive)
+volumes/chromadb/chroma/**
+!volumes/chromadb/chroma/__PLACEHOLDER__
+
+volumes/ollama/**
+!volumes/ollama/__PLACEHOLDER__
+
+volumes/teleaiagent/audio/**
+!volumes/teleaiagent/audio/__PLACEHOLDER__
+
+volumes/teleaiagent/cache/**
+!volumes/teleaiagent/cache/__PLACEHOLDER__
+
+volumes/teleaiagent/context/**
+!volumes/teleaiagent/context/__PLACEHOLDER__
+
+volumes/teleaiagent/documents/**
+!volumes/teleaiagent/documents/__PLACEHOLDER__
+
+volumes/teleaiagent/images/**
+!volumes/teleaiagent/images/__PLACEHOLDER__
+
+volumes/teleaiagent/logs/**
+!volumes/teleaiagent/logs/__PLACEHOLDER__
+
+volumes/teleaiagent/videos/**
+!volumes/teleaiagent/videos/__PLACEHOLDER__
+
+volumes/teleaiagent/voice/**
+!volumes/teleaiagent/voice/__PLACEHOLDER__

@@ -1,0 +1,56 @@
+networks:
+  mynetwork:
+    driver: bridge
+
+services:
+  teleaiagent:
+    build:
+      context: .
+      dockerfile: Dockerfile-teleaiagent
+    container_name: teleaiagent
+    env_file:
+      - .env
+    volumes:
+      - ./volumes/teleaiagent/audio:/app/audio
+      - ./volumes/teleaiagent/cache:/root/.cache  # Persist ONNX model cache
+      - ./volumes/teleaiagent/context:/app/context
+      - ./volumes/teleaiagent/documents:/app/documents
+      - ./volumes/teleaiagent/images:/app/images
+      - ./volumes/teleaiagent/videos:/app/videos
+      - ./volumes/teleaiagent/voice:/app/voice
+      - ./volumes/teleaiagent/logs:/app/logs
+    networks:
+      - mynetwork
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama-server
+    volumes:
+      - ./volumes/ollama:/root/.ollama
+    networks:
+      - mynetwork
+    restart: unless-stopped
+
+  chromadb:
+    image: chromadb/chroma:0.6.3
+    container_name: chromadb
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./volumes/chromadb/chroma:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
+      - ANONYMIZED_TELEMETRY=FALSE
+      - CHROMA_SERVER_NOFILE=65535
+    env_file:
+      - .env
+    networks:
+      - mynetwork
