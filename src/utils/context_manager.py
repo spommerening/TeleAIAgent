@@ -84,7 +84,11 @@ class ContextManager:
                 raise ValueError("Timestamp must be provided for dictionary messages")
             timestamp_str = timestamp
         else:
-            timestamp_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(message.date))
+            # Handle aiogram datetime object (not Unix timestamp like pyTelegramBotAPI)
+            if hasattr(message.date, 'strftime'):  # It's already a datetime object
+                timestamp_str = message.date.strftime('%Y-%m-%d %H:%M:%S')
+            else:  # Fallback for Unix timestamp
+                timestamp_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(message.date))
         
         # Extract chat information
         chat_info = self._extract_chat_info(message)

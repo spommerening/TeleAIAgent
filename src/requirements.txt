@@ -1,12 +1,13 @@
-# Telegram Bot
-pyTelegramBotAPI==4.14.0
+# Telegram Bot (AsyncIO)
+aiogram==3.13.0
 
 # Text Processing
 markdown2==2.4.10
 pyttsx3==2.90
 
-# Web Requests
-requests==2.31.0
+# Async Web Requests
+aiohttp==3.10.10
+aiofiles~=23.2.1
 
 # AI/ML Libraries
 openai==1.54.3

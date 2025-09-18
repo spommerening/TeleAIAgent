@@ -1,9 +1,10 @@
 """
-AI Client Manager - Management of AI API calls
+AI Client Manager - Management of AI API calls (AsyncIO)
 """
 
 import logging
-import requests
+import aiohttp
+import asyncio
 import datetime
 import re
 import pytz
@@ -15,56 +16,58 @@ class AIClient:
     def __init__(self):
         self.backend = Config.AI_BACKEND
         self.timezone = pytz.timezone(Config.DEFAULT_TIMEZONE)
+        self._model_initialized = False
         
         if self.backend == 'perplexity':
             self.api_key = Config.PERPLEXITY_API_KEY
             self.api_url = Config.PERPLEXITY_API_URL
             self.model = Config.PERPLEXITY_MODEL
             self.temperature = Config.PERPLEXITY_TEMPERATURE
+            self._model_initialized = True  # Perplexity doesn't need model initialization
         elif self.backend == 'ollama':
             self.url = Config.OLLAMA_URL
             self.api_url = Config.OLLAMA_API_URL.rstrip('/')
             self.model = Config.OLLAMA_MODEL
             self.temperature = Config.OLLAMA_TEMPERATURE
-            # Ensure model is available
-            self._ensure_ollama_model()
         else:
             raise ValueError(f"Unknown AI backend: {self.backend}")
+    
+    async def initialize(self):
+        """Initialize the AI client (call this after creating the instance)"""
+        if self.backend == 'ollama' and not self._model_initialized:
+            await self._ensure_ollama_model()
+            self._model_initialized = True
             
-    def _ensure_ollama_model(self):
+    async def _ensure_ollama_model(self):
         """Checks if the Ollama model is available and loads it if needed"""
-        try:
-            # Check if model exists
-            check_url = f"{self.url}/api/show"  # Lists available models
-            response = requests.post(check_url, json={"name": self.model})
-            
-            if response.status_code in [404, 405]:  # Model not found or endpoint not available
-                logger.info(f"Model {self.model} is being downloaded...")
-                pull_url = f"{self.url}/api/pull"
-                pull_response = requests.post(pull_url, json={"name": self.model}, stream=True)
-                pull_response.raise_for_status()
-                
-                # Log Download progress
-                for line in pull_response.iter_lines():
-                    if line:
-                        progress = line.decode('utf-8')
-                        logger.debug(f"Download progress: {progress}")
-                
-                logger.info(f"Model {self.model} successfully downloaded")
-            else:
-                response.raise_for_status()
-                logger.info(f"Model {self.model} is already available")
-                
-        except requests.exceptions.RequestException as e:
-            error_msg = f"Error checking/downloading model: {e}"
-            if hasattr(e, 'response') and e.response is not None:
-                try:
-                    error_details = e.response.json()
-                    error_msg += f"\nAPI Response: {error_details}"
-                except ValueError:
-                    error_msg += f"\nAPI Response Text: {e.response.text}"
-            logger.error(error_msg)
-            raise ValueError(f"Model {self.model} could not be initialized")
+        async with aiohttp.ClientSession() as session:
+            try:
+                # Check if model exists
+                check_url = f"{self.url}/api/show"
+                async with session.post(check_url, json={"name": self.model}) as response:
+                    
+                    if response.status in [404, 405]:  # Model not found or endpoint not available
+                        logger.info(f"Model {self.model} is being downloaded...")
+                        pull_url = f"{self.url}/api/pull"
+                        
+                        async with session.post(pull_url, json={"name": self.model}) as pull_response:
+                            pull_response.raise_for_status()
+                            
+                            # Log Download progress
+                            async for line in pull_response.content:
+                                if line:
+                                    progress = line.decode('utf-8')
+                                    logger.debug(f"Download progress: {progress}")
+                        
+                        logger.info(f"Model {self.model} successfully downloaded")
+                    else:
+                        response.raise_for_status()
+                        logger.info(f"Model {self.model} is already available")
+                        
+            except aiohttp.ClientError as e:
+                error_msg = f"Error checking/downloading model: {e}"
+                logger.error(error_msg)
+                raise ValueError(f"Model {self.model} could not be initialized")
         
     def get_current_timestamp(self):
         """Returns current timestamp"""
@@ -143,14 +146,18 @@ class AIClient:
         
         return response.strip()
     
-    def query_ai(self, question, context="", status_callback=None):
+    async def query_ai(self, question, context="", status_callback=None):
         """Sends request to AI API
         
         Args:
             question (str): The question to ask the AI
             context (str, optional): Additional context for the question
-            status_callback (callable, optional): Callback function for status messages
+            status_callback (callable, optional): Async callback function for status messages
         """
+        # Ensure the client is initialized
+        if not self._model_initialized:
+            await self.initialize()
+            
         headers = {"Content-Type": "application/json"}
         messages = [
             {"role": "system", "content": self.create_system_prompt(context)},
@@ -174,52 +181,44 @@ class AIClient:
                 }
             }
         
-        try:
-            # Calculate and output token count
-            total_tokens = self.calculate_request_tokens(messages)
-            logger.info(f"📊 Sending request to {self.model} - Estimated token count: {total_tokens}")
-            start_time = datetime.datetime.now()
-            
-            api_endpoint = f"{self.url}/api/chat" if self.backend == 'ollama' else self.api_url
-            
-            # Send intermediate message for Ollama
-            if self.backend == 'ollama' and status_callback:
-                status_callback("I'm processing your question...")
-            
-            response = requests.post(api_endpoint, headers=headers, json=data)
-            response.raise_for_status()
-            
-            result = response.json()
-            if self.backend == 'perplexity':
-                ai_response = result['choices'][0]['message']['content']
-            elif self.backend == 'ollama':
-                ai_response = result['message']['content']
-            
-            # Calculate processing time
-            elapsed_time = (datetime.datetime.now() - start_time).total_seconds()
-            processed_response = self.process_response(ai_response)
-            
-            # Add processing time
-            return f"{processed_response}\n\n⏱️ Processing time: {elapsed_time:.2f} seconds"
-            
-        except requests.exceptions.RequestException as e:
-            error_msg = f"Error in API request: {e}"
-            if hasattr(e, 'response') and e.response is not None:
-                try:
-                    error_details = e.response.json()
-                    error_msg += f"\nAPI Response: {error_details}"
-                except ValueError:
-                    error_msg += f"\nAPI Response Text: {e.response.text}"
-                error_msg += f"\nStatus Code: {e.response.status_code}"
-                error_msg += f"\nRequest Headers: {e.response.request.headers}"
-                error_msg += f"\nRequest Body: {e.response.request.body}"
-            logger.error(error_msg)
-            return "An error occurred with your API request."
-            
-        except (KeyError, IndexError) as e:
-            logger.error(f"Error parsing API response: {e}")
-            return "Error processing the response from the AI API."
-            
-        except Exception as e:
-            logger.error(f"Unexpected error: {e}")
-            return "An unexpected error occurred."
+        async with aiohttp.ClientSession() as session:
+            try:
+                # Calculate and output token count
+                total_tokens = self.calculate_request_tokens(messages)
+                logger.info(f"📊 Sending request to {self.model} - Estimated token count: {total_tokens}")
+                start_time = datetime.datetime.now()
+                
+                api_endpoint = f"{self.url}/api/chat" if self.backend == 'ollama' else self.api_url
+                
+                # Send intermediate message for Ollama
+                if self.backend == 'ollama' and status_callback:
+                    await status_callback("I'm processing your question...")
+                
+                async with session.post(api_endpoint, headers=headers, json=data) as response:
+                    response.raise_for_status()
+                    result = await response.json()
+                
+                if self.backend == 'perplexity':
+                    ai_response = result['choices'][0]['message']['content']
+                elif self.backend == 'ollama':
+                    ai_response = result['message']['content']
+                
+                # Calculate processing time
+                elapsed_time = (datetime.datetime.now() - start_time).total_seconds()
+                processed_response = self.process_response(ai_response)
+                
+                # Add processing time
+                return f"{processed_response}\n\n⏱️ Processing time: {elapsed_time:.2f} seconds"
+                
+            except aiohttp.ClientError as e:
+                error_msg = f"Error in API request: {e}"
+                logger.error(error_msg)
+                return "An error occurred with your API request."
+                
+            except (KeyError, IndexError) as e:
+                logger.error(f"Error parsing API response: {e}")
+                return "Error processing the response from the AI API."
+                
+            except Exception as e:
+                logger.error(f"Unexpected error: {e}")
+                return "An unexpected error occurred."

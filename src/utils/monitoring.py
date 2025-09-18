@@ -1,12 +1,11 @@
 """
-Monitoring Utilities
-Helper functions for system monitoring
+Monitoring Utilities (AsyncIO)
+Helper functions for system monitoring using AsyncIO
 """
 
 import logging
 import psutil
-import time
-import threading
+import asyncio
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -15,52 +14,49 @@ class SystemMonitor:
     def __init__(self):
         self.heartbeat_interval = Config.WORKER_HEARTBEAT_INTERVAL
         self.monitoring_active = False
-        self.monitor_thread = None
+        self.monitor_task = None
         
-    def log_resource_usage(self):
+    async def log_resource_usage(self):
         """Logs current resource usage"""
         try:
             process = psutil.Process()
             memory_info = process.memory_info()
-            cpu_percent = process.cpu_percent(interval=1)
-            
-#             logger.info(
-#                 f"Resource usage - "
-#                 f"Memory: {memory_info.rss / 1024 / 1024:.2f} MB, "
-#                 f"CPU: {cpu_percent}%"
-#             )
+            cpu_percent = process.cpu_percent(interval=0.1)  # Non-blocking
             
             return {
                 'memory_mb': memory_info.rss / 1024 / 1024,
                 'cpu_percent': cpu_percent,
-                'timestamp': time.time()
+                'timestamp': asyncio.get_event_loop().time()
             }
             
         except Exception as e:
             logger.error(f"Error during monitoring: {e}")
             return None
     
-    def heartbeat(self):
+    async def heartbeat(self):
         """Continuous heartbeat for monitoring"""
         while self.monitoring_active:
             # logger.info("System Heartbeat")
-            self.log_resource_usage()
-            time.sleep(self.heartbeat_interval)
+            await self.log_resource_usage()
+            await asyncio.sleep(self.heartbeat_interval)
     
-    def start_monitoring(self):
+    async def start_monitoring(self):
         """Starts continuous monitoring"""
         if not self.monitoring_active:
             self.monitoring_active = True
-            self.monitor_thread = threading.Thread(target=self.heartbeat, daemon=True)
-            self.monitor_thread.start()
-            logger.info("System monitoring started")
+            self.monitor_task = asyncio.create_task(self.heartbeat())
+            logger.info("Async system monitoring started")
     
-    def stop_monitoring(self):
+    async def stop_monitoring(self):
         """Stops continuous monitoring"""
         self.monitoring_active = False
-        if self.monitor_thread:
-            self.monitor_thread.join(timeout=5)
-        logger.info("System monitoring stopped")
+        if self.monitor_task:
+            self.monitor_task.cancel()
+            try:
+                await self.monitor_task
+            except asyncio.CancelledError:
+                pass
+        logger.info("Async system monitoring stopped")
     
     def get_system_stats(self):
         """Returns current system statistics"""
