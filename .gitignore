@@ -31,3 +31,7 @@ volumes/teleaiagent/videos/**
 
 volumes/teleaiagent/voice/**
 !volumes/teleaiagent/voice/__PLACEHOLDER__
+
+# Virtual environment (Python3)
+venv/**
+**/__pycache__/**
