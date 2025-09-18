@@ -1,6 +1,16 @@
-# TeleAIAgent - Intelligent Telegram Chat Bot
+# TeleAIAgent - Intelligent Telegram Chat Bot (AsyncIO)
 
-TeleAIAgent is an extensible, AI-powered Telegram bot with comprehensive features for text, file, and multimedia processing. The bot leverages multiple AI backends (Perplexity AI, Ollama) and provides semantic search through ChromaDB integration for enhanced context-aware conversations.
+TeleAIAgent is an extensible, AI-powered Telegram bot with **concurrent processing capabilities** for text, file, and multimedia processing. Built with **AsyncIO** for high-performance concurrent request handling, the bot leverages multiple AI backends (Perplexity AI, Ollama) and provides semantic search through ChromaDB integration for enhanced context-aware conversations.
+
+## 🚀 **AsyncIO Implementation - Concurrent Processing**
+
+⚡ **NEW**: The bot now supports **multiple simultaneous users** without blocking!
+- **Concurrent AI requests** - multiple users can ask questions at the same time
+- **Non-blocking file processing** - upload files while AI processes other requests  
+- **Modern aiogram 3.x architecture** - event-driven message handling
+- **Production-ready scalability** - handles group chats with multiple active users
+
+> 📋 **[AsyncIO Documentation](doc/ASYNCIO_README.md)** - Complete technical details and migration guide
 
 ## 🏗️ Project Architecture
 
@@ -11,21 +21,22 @@ TeleAIAgent is an extensible, AI-powered Telegram bot with comprehensive feature
 │  ├─ Dockerfile-teleaiagent      # Bot container image
 │  └─ .env                        # Environment variables
 │
-├─ 🚀 Core Application (src/)
-│  ├─ main.py                     # Bot main entry point & handler setup
+├─ 🚀 Core Application (src/) - **AsyncIO Architecture**
+│  ├─ main.py                     # AsyncIO bot with aiogram 3.x & concurrent handlers
 │  ├─ config.py                   # Central configuration
-│  ├─ requirements.txt            # Python dependencies
+│  ├─ requirements.txt            # AsyncIO dependencies (aiogram, aiohttp, aiofiles)
 │  ├─ test_chromadb.py            # ChromaDB integration test
+│  ├─ test_async.py               # AsyncIO functionality & concurrent testing
 │  │
-│  ├─ 🔧 handlers/                # Message processing
-│  │  ├─ text_handler.py          # Text & AI interactions
-│  │  └─ file_handler.py          # File downloads (images, docs, audio)
+│  ├─ 🔧 handlers/ (AsyncIO)      # Concurrent message processing
+│  │  ├─ text_handler.py          # Async text & AI interactions
+│  │  └─ file_handler.py          # Async file downloads (images, docs, audio)
 │  │
-│  └─ 🛠️ utils/                   # Core services
-│     ├─ ai_client.py             # Central AI backend manager
+│  └─ 🛠️ utils/ (AsyncIO)         # Async core services
+│     ├─ ai_client.py             # Async AI backend manager (aiohttp)
 │     ├─ context_manager.py       # Chat context & ChromaDB integration
 │     ├─ text_processor.py        # Markdown/HTML conversion
-│     └─ monitoring.py            # System monitoring
+│     └─ monitoring.py            # Async system monitoring
 │
 ├─ 💾 Persistent Data (volumes/)
 │  ├─ chromadb/                   # Vector database for RAG
@@ -41,63 +52,80 @@ TeleAIAgent is an extensible, AI-powered Telegram bot with comprehensive feature
 │  └─ ollama/                     # Local LLM models
 │
 └─ 📋 Documentation
-   ├─ README.md                   # This documentation
+   ├─ README.md                   # This documentation (AsyncIO)
    └─ doc/
-      └─ CHROMADB_INTEGRATION.md  # ChromaDB integration guide
+      ├─ ASYNCIO_README.md        # AsyncIO implementation & concurrent processing
+      ├─ CHROMADB_INTEGRATION.md  # ChromaDB integration guide
+      └─ OLLAMA_BACKEND_SETUP.md  # Local AI backend configuration
 ```
 
-## 🔄 Data Flow Diagram
+## 🔄 AsyncIO Data Flow - Concurrent Processing
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Telegram      │────│   TeleAIAgent   │────│   AI Client     │
-│   User/Group    │    │   (main.py)     │    │   Manager       │
-│                 │    │                 │    │                 │
+│   Multiple      │    │   TeleAIAgent   │    │   Async AI      │
+│   Telegram      │────│   (AsyncIO)     │────│   Client        │
+│   Users/Groups  │    │   aiogram 3.x   │    │   aiohttp       │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │                       │
-         │ 1. Message            │ 3. AI Request         │
-         │                       │                       ▼
-         ▼                       ▼            ┌─────────────────┐
-┌─────────────────┐    ┌─────────────────┐    │  AI Backends    │
-│  Text/File      │    │  Context        │    │ • Perplexity    │
-│  Handler        │────│  Manager        │    │ • Ollama        │
-│                 │    │  + ChromaDB     │    │                 │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         │ 2. Processing         │ 4. Relevant Context   │
+   🔀 Multiple              🔀 Concurrent         🔀 Parallel
+      Messages                  Handlers               API Calls
          │                       │                       │
          ▼                       ▼                       ▼
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│  File Storage   │    │  Response       │    │   System        │
-│  (volumes/)     │────│  Processing     │────│   Monitoring    │
+│  Async Text/    │    │  Async Context  │    │  AI Backends    │
+│  File Handlers  │────│  Manager        │    │ • Perplexity    │
+│  (aiofiles)     │    │  + ChromaDB     │    │ • Ollama        │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+    🚀 Non-blocking       🧠 Smart Context      ⚡ Concurrent
+      File Ops               Retrieval              Processing
+         │                       │                       │
+         ▼                       ▼                       ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│  Async File     │    │  Concurrent     │    │   Async System  │
+│  Storage        │────│  Response       │────│   Monitoring    │
+│  (volumes/)     │    │  Processing     │    │   (asyncio)     │
 │ • Documents     │    │ • Markdown→HTML │    │ • CPU/RAM       │
 │ • Images/Video  │    │ • Text Chunking │    │ • ChromaDB      │
-│ • Audio/Voice   │    │ • TTS Support   │    │ • Chat Stats    │
-│ • Chat Context  │    │                 │    │                 │
+│ • Audio/Voice   │    │ • Multiple Users│    │ • Chat Stats    │
+│ • Chat Context  │    │ • Queue-Free!   │    │ • Performance   │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
+
+🎯 Key Benefits: Multiple users → Concurrent processing → No waiting queues!
 ```
 
 ## ⚙️ Core Features
+
+### ⚡ **AsyncIO Concurrent Processing** 
+- **Multiple Simultaneous Users**: No more waiting in queue!
+- **Concurrent AI Requests**: Multiple questions processed simultaneously
+- **Non-blocking File Operations**: Upload files while AI processes other requests
+- **aiogram 3.x Architecture**: Modern, event-driven message handling
+- **Production Scalability**: Handles high-traffic group chats efficiently
 
 ### 🤖 AI Integration
 - **Multi-Engine Support**: Perplexity AI & Ollama local models
 - **Context-Aware Responses**: Chat history is considered for better answers
 - **Semantic Search**: ChromaDB-powered context retrieval
 - **Automatic Model Management**: Ollama models are downloaded on-demand
+- **Async API Calls**: Non-blocking AI requests with aiohttp
 
-### 💬 Chat Features
-- **Group Support**: Bot responds to @mentions and replies
-- **Private Chats**: Direct 1:1 communication
+### 💬 Enhanced Chat Features
+- **Concurrent Group Support**: Multiple users in groups processed simultaneously
+- **Fast Private Chats**: Direct 1:1 communication without blocking
 - **Multi-language**: German preferred, multi-language support
 - **Markdown Support**: Rich-text formatting in responses
-- **Message Chunking**: Automatic splitting of long messages
+- **Intelligent Message Chunking**: Automatic splitting of long messages
+- **Command System**: /start, /help, /status commands
 
-### 📁 File Processing
-- **Images**: Automatic download and storage
-- **Documents**: PDF, Word, Excel, etc.
-- **Audio/Video**: Multimedia file processing
-- **Voice Messages**: OGG format support
-- **File Organization**: Structured storage by type
+### 📁 Async File Processing
+- **Non-blocking Image Processing**: Automatic download and storage (aiofiles)
+- **Concurrent Document Handling**: PDF, Word, Excel, etc. (multiple uploads simultaneously)
+- **Parallel Audio/Video Processing**: Multimedia files processed without blocking
+- **Async Voice Messages**: OGG format support with stream processing
+- **Smart File Organization**: Structured storage by type with async operations
+- **Upload While Processing**: Users can send multiple files while others process
 
 ### 🔍 Advanced Search & Context
 - **ChromaDB Integration**: Semantic search in chat histories
@@ -105,19 +133,22 @@ TeleAIAgent is an extensible, AI-powered Telegram bot with comprehensive feature
 - **Persistent Storage**: All data survives container restarts
 - **Metadata-based Filtering**: Efficient context queries
 
-### 📊 Monitoring & Administration
-- **System Statistics**: CPU, RAM, process monitoring
-- **Chat Analytics**: Message counts, storage usage
-- **ChromaDB Health**: Connection status and document counts
-- **Comprehensive Logging**: Debug and error logs with rotation
+### 📊 AsyncIO Monitoring & Administration
+- **Real-time System Statistics**: CPU, RAM, concurrent task monitoring
+- **Concurrent Chat Analytics**: Message counts, parallel processing stats
+- **Async ChromaDB Health**: Non-blocking connection status and document counts
+- **Performance Monitoring**: AsyncIO task tracking, concurrent request metrics
+- **Comprehensive Logging**: Debug and error logs with async rotation
+- **Live Statistics**: /status command shows concurrent processing information
 
-## 🚀 Installation & Setup
+## 🚀 AsyncIO Installation & Setup
 
-### Prerequisites
+### Prerequisites (AsyncIO Optimized)
 - Docker Engine 20.10+
 - Docker Compose Plugin
 - Git
-- 4GB+ RAM recommended
+- 4GB+ RAM recommended (handles concurrent processing efficiently)
+- CPU with multiple cores (better for async operations)
 
 ### 1. Clone Repository
 ```bash
@@ -137,26 +168,29 @@ PERPLEXITY_API_KEY="your_perplexity_api_key"
 AI_BACKEND="perplexity"  # or "ollama"
 ```
 
-### 3. Start Services
+### 3. Start AsyncIO Services
 ```bash
-# Start all services (Bot + ChromaDB + Ollama)
+# Start all services (AsyncIO Bot + ChromaDB + Ollama)
 docker compose up -d
 
-# Start with live logs
+# Start with live logs (watch concurrent processing!)
 docker compose up
+
+# Quick test concurrent processing:
+# Send multiple messages to your bot simultaneously - they'll all process at once!
 ```
 
-## 🐳 Docker Management
+## 🐳 AsyncIO Docker Management
 
-### Container Operations
+### Container Operations (AsyncIO Optimized)
 ```bash
-# Check status
+# Check status (AsyncIO bot performance)
 docker compose ps
 
-# View logs
-docker compose logs -f teleaiagent
-docker compose logs -f chromadb
-docker compose logs -f ollama
+# View concurrent processing logs
+docker compose logs -f teleaiagent  # Watch AsyncIO in action!
+docker compose logs -f chromadb     # Concurrent database operations
+docker compose logs -f ollama       # Parallel AI model requests
 
 # Restart services
 docker compose restart teleaiagent
@@ -187,15 +221,15 @@ docker image prune
 docker compose down && docker compose build && docker compose up -d
 ```
 
-### Debugging & Maintenance
+### AsyncIO Debugging & Maintenance
 ```bash
-# Enter container
+# Enter container (check AsyncIO processes)
 docker compose exec teleaiagent bash
 docker compose exec chromadb bash
 docker compose exec ollama bash
 
-# Check container resources
-docker stats
+# Check container resources (AsyncIO efficiency)
+docker stats  # Watch CPU usage during concurrent processing
 
 # Check volume contents
 docker compose exec teleaiagent ls -la /app/context/
@@ -207,11 +241,11 @@ docker compose exec ollama ollama list
 docker compose exec ollama ollama pull llama3.2
 ```
 
-## 📡 AI Backend Configuration
+## 📡 AsyncIO AI Backend Configuration
 
-### Supported AI Providers
-- **Perplexity AI**: Main engine with integrated web search
-- **Ollama**: Local LLM models (llama3.2, gemma, phi3, etc.)
+### Supported AI Providers (Concurrent Processing)
+- **Perplexity AI**: Main engine with integrated web search (async aiohttp requests)
+- **Ollama**: Local LLM models (llama3.2, gemma, phi3, etc.) with concurrent model access
 
 ### Backend Selection
 Set in `.env` file:
@@ -246,31 +280,36 @@ OLLAMA_TEMPERATURE = 0.7
 @botname <query> - Mention bot in groups
 ```
 
-## 🔧 Development & Extension
+## 🔧 AsyncIO Development & Extension
 
-### Local Development
+### Local Development (AsyncIO Environment)
 ```bash
-# Set up Python environment
+# Set up AsyncIO Python environment
 cd src/
 python -m venv venv
 source venv/bin/activate  # Linux/Mac
 # or venv\Scripts\activate  # Windows
-pip install -r requirements.txt
+pip install -r requirements.txt  # Includes aiogram 3.x, aiohttp, aiofiles
 
-# Run locally (requires .env configuration)
-python main.py
+# Run AsyncIO bot locally (requires .env configuration)
+python main.py  # Starts AsyncIO event loop with concurrent processing
 ```
 
-### Testing ChromaDB Integration
+### Testing AsyncIO Integration
 ```bash
-# Test ChromaDB connectivity
+# Test ChromaDB connectivity (async)
 python test_chromadb.py
+
+# Test concurrent processing
+python test_async.py  # Validates AsyncIO performance and concurrent operations
 ```
 
-### Adding New Features
-1. **Extend Handlers**: `handlers/` for new message types
-2. **Add Utilities**: `utils/` for helper functions
+### Adding New AsyncIO Features
+1. **Extend Async Handlers**: `handlers/` for new message types (use async/await patterns)
+2. **Add Async Utilities**: `utils/` for helper functions (aiohttp, aiofiles)
 3. **Modify Configuration**: `config.py` for settings
+4. **Follow AsyncIO Patterns**: Always use `async def` and `await` for I/O operations
+5. **Concurrent Design**: Design features to handle multiple simultaneous users
 
 ### Key Configuration Options
 All settings in `src/config.py`:
@@ -288,13 +327,14 @@ All settings in `src/config.py`:
 - **Log Rotation**: Automatic log cleanup (10MB max, 3 files)
 - **Non-root Execution**: Bot runs as non-privileged user
 
-## 🐛 Troubleshooting
+## 🐛 AsyncIO Troubleshooting
 
-### Common Issues
+### Common AsyncIO Issues
 
-**Bot not responding:**
+**Bot not responding or AsyncIO errors:**
 ```bash
 docker compose logs teleaiagent | grep ERROR
+docker compose logs teleaiagent | grep "asyncio"  # Check AsyncIO specific errors
 docker compose restart teleaiagent
 ```
 
@@ -324,12 +364,15 @@ docker system prune -a
 docker system df
 ```
 
-**Performance issues:**
+**AsyncIO Performance issues:**
 ```bash
-# Monitor resources
+# Monitor concurrent processing resources
 docker stats --no-stream
 
-# Check ChromaDB performance
+# Check AsyncIO performance with concurrent test
+docker compose exec teleaiagent python test_async.py
+
+# Check ChromaDB async performance
 docker compose exec teleaiagent python test_chromadb.py
 ```
 
@@ -368,23 +411,27 @@ DEBUG=false
 
 ## 📞 Support & Dependencies
 
-### Key Dependencies
-- **pyTelegramBotAPI**: Telegram Bot API wrapper
-- **ChromaDB**: Vector database for semantic search
-- **Ollama**: Local LLM inference (optional)
-- **Perplexity AI**: Cloud AI service (optional)
+### Key AsyncIO Dependencies
+- **aiogram 3.13.0**: Modern async Telegram Bot API wrapper (replaces pyTelegramBotAPI)
+- **aiohttp 3.10.10**: Async HTTP client for API requests
+- **aiofiles ~23.2.1**: Non-blocking file operations
+- **ChromaDB**: Vector database for semantic search (async compatible)
+- **Ollama**: Local LLM inference with concurrent model access (optional)
+- **Perplexity AI**: Cloud AI service with async requests (optional)
 
-### System Requirements
-- **CPU**: 2+ cores recommended
-- **RAM**: 4GB+ for optimal performance (8GB+ with Ollama)
+### AsyncIO System Requirements
+- **CPU**: 2+ cores recommended (AsyncIO utilizes multiple cores efficiently)
+- **RAM**: 4GB+ for optimal concurrent performance (8GB+ with Ollama)
 - **Storage**: 10GB+ for data, logs, and models
-- **Network**: Stable internet connection for APIs
+- **Network**: Stable internet connection for concurrent API requests
 
-### Architecture
-- **Container Runtime**: Docker with compose orchestration
-- **Data Persistence**: Named volumes for data safety
+### AsyncIO Architecture
+- **Container Runtime**: Docker with compose orchestration + AsyncIO event loop
+- **Concurrent Processing**: aiogram 3.x with async/await patterns throughout
+- **Data Persistence**: Named volumes for data safety with async file operations
 - **Service Discovery**: Internal DNS via Docker networks
-- **Health Monitoring**: Built-in health checks and logging
+- **Health Monitoring**: AsyncIO-aware health checks and concurrent logging
+- **Event-Driven Design**: Non-blocking message handling with concurrent AI requests
 
 ---
 
