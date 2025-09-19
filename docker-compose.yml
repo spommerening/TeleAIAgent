@@ -22,6 +22,8 @@ services:
     networks:
       - mynetwork
     restart: unless-stopped
+    depends_on:
+      - tagger
     # Resource limits for CPU-only operation
     deploy:
       resources:
@@ -34,6 +36,44 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  tagger:
+    build:
+      context: .
+      dockerfile: Dockerfile-tagger
+    container_name: tagger
+    env_file:
+      - .env
+    ports:
+      - "7777:7777"  # Expose tagger API port
+    volumes:
+      - ./volumes/teleaiagent/images:/app/volume_images  # Shared volume for image storage
+      - ./volumes/tagger/logs:/app/logs  # Separate logs for tagger
+      - ./volumes/tagger/cache:/root/.cache  # Separate cache for tagger
+    networks:
+      - mynetwork
+    restart: unless-stopped
+    depends_on:
+      - qdrant
+      - ollama
+    # Resource limits for CPU-only operation with AI processing
+    deploy:
+      resources:
+        limits:
+          memory: 3G  # More memory for image processing + AI models
+        reservations:
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7777/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   ollama:
     image: ollama/ollama:0.11.11

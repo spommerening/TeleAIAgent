@@ -7,7 +7,9 @@ import logging
 import aiohttp
 import aiofiles
 import os
+import time
 from config import Config
+from utils.tagger_client import TaggerClient
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +17,11 @@ class FileHandler:
     def __init__(self, bot):
         self.bot = bot
         self.bot_token = Config.BOT_TOKEN
+        self.tagger_client = TaggerClient()
+        
+    async def initialize(self):
+        """Initialize tagger client"""
+        await self.tagger_client.initialize()
         
     async def handle_message(self, message):
         """Processes incoming files"""
@@ -29,21 +36,34 @@ class FileHandler:
             await self._download_media(message)
     
     async def _download_photos(self, message):
-        """Downloads photos"""
+        """Process photos by forwarding to tagger service"""
         
         # Find largest photo
         largest_photo = max(message.photo, key=lambda x: (x.width, x.height))
-        
         photo_id = largest_photo.file_id
         
         try:
+            # Get file info and download image data
             file_info = await self.bot.get_file(photo_id)
-            file_path = os.path.join(Config.IMAGES_DIR, f"{photo_id}.jpg")
             download_url = f"https://api.telegram.org/file/bot{self.bot_token}/{file_info.file_path}"
             
-            await self._download_file(download_url, file_path)
+            # Download image data
+            image_data = await self._download_image_data(download_url)
+            
+            # Prepare Telegram metadata
+            telegram_metadata = self._extract_telegram_metadata(message, file_info, photo_id)
+            
+            # Send to tagger service for processing
+            result = await self.tagger_client.process_image(
+                image_data=image_data,
+                telegram_metadata=telegram_metadata,
+                filename=f"{photo_id}.jpg"
+            )
+            
+            logger.info(f"✅ Photo processed by tagger service: {result.get('result', {}).get('tags', [])}")
+            
         except Exception as e:
-            logger.error(f"Error downloading photo: {e}", exc_info=True)
+            logger.error(f"Error processing photo with tagger service: {e}", exc_info=True)
     
     async def _download_documents(self, message):
         """Downloads documents"""
@@ -90,8 +110,45 @@ class FileHandler:
             download_url = f"https://api.telegram.org/file/bot{self.bot_token}/{file_info.file_path}"
             await self._download_file(download_url, file_path)
     
+    async def _download_image_data(self, download_url):
+        """Download image data and return bytes (for tagger service)"""
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.get(download_url) as response:
+                    if response.status == 200:
+                        return await response.read()
+                    else:
+                        logger.error(f"Download failed. Status: {response.status}")
+                        raise Exception(f"Download failed with status: {response.status}")
+            except Exception as e:
+                logger.error(f"Download error: {e}")
+                raise
+
+    def _extract_telegram_metadata(self, message, file_info, file_id):
+        """Extract Telegram message metadata for tagger service"""
+        # Handle aiogram datetime object
+        if hasattr(message.date, 'strftime'):  # It's already a datetime object
+            timestamp_str = message.date.strftime('%Y-%m-%d %H:%M:%S')
+        else:  # Fallback for Unix timestamp
+            timestamp_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(message.date))
+        
+        return {
+            'chat_id': message.chat.id,
+            'chat_title': message.chat.title if message.chat.title else message.chat.first_name,
+            'chat_type': message.chat.type,
+            'user_id': message.from_user.id,
+            'user_name': message.from_user.first_name,
+            'message_id': message.message_id,
+            'timestamp': timestamp_str,
+            'date': time.strftime('%Y-%m-%d', time.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')),
+            'file_id': file_id,
+            'file_size': file_info.file_size,
+            'has_caption': bool(message.caption),
+            'caption': message.caption or ""
+        }
+
     async def _download_file(self, download_url, file_path):
-        """Universal file download function"""
+        """Universal file download function (for non-image files)"""
         async with aiohttp.ClientSession() as session:
             try:
                 async with session.get(download_url) as response:

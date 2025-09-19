@@ -1,0 +1,234 @@
+"""
+FastAPI Tagger Microservice
+Main entry point for the image tagging service
+"""
+
+import asyncio
+import logging
+import os
+import sys
+from contextlib import asynccontextmanager
+from typing import Optional
+
+import uvicorn
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
+
+from config import Config
+from handlers.image_handler import ImageHandler
+from utils.ollama_client import OllamaClient
+from utils.qdrant_client import QdrantManager
+from utils.file_manager import FileManager
+
+# Configure simple logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+logger = logging.getLogger(__name__)
+
+# Global service managers
+ollama_client: Optional[OllamaClient] = None
+qdrant_manager: Optional[QdrantManager] = None
+file_manager: Optional[FileManager] = None
+image_handler: Optional[ImageHandler] = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown"""
+    global ollama_client, qdrant_manager, file_manager, image_handler
+    
+    logger.info("🚀 Starting Tagger microservice...")
+    
+    try:
+        # Initialize service managers
+        logger.info("🔧 Initializing service managers...")
+        
+        ollama_client = OllamaClient()
+        qdrant_manager = QdrantManager()
+        file_manager = FileManager()
+        image_handler = ImageHandler(ollama_client, qdrant_manager, file_manager)
+        
+        # Initialize connections
+        await ollama_client.initialize()
+        await qdrant_manager.initialize()
+        
+        logger.info("✅ Tagger service initialized successfully")
+        
+        yield  # Service is running
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize tagger service: {str(e)}")
+        raise
+    finally:
+        # Cleanup
+        logger.info("🔄 Shutting down tagger service...")
+        
+        if ollama_client:
+            await ollama_client.close()
+        if qdrant_manager:
+            await qdrant_manager.close()
+            
+        logger.info("✅ Tagger service shut down complete")
+
+
+# Create FastAPI app with lifespan
+app = FastAPI(
+    title="Image Tagger Microservice",
+    description="Microservice for AI-powered image tagging with Ollama and Qdrant integration",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+
+@app.get("/")
+async def root():
+    """Health check endpoint"""
+    return {"message": "Image Tagger Microservice", "status": "running", "version": "1.0.0"}
+
+
+@app.get("/health")
+async def health_check():
+    """Detailed health check"""
+    health_status = {
+        "service": "healthy",
+        "ollama": "unknown",
+        "qdrant": "unknown",
+        "file_system": "unknown"
+    }
+    
+    try:
+        # Check Ollama connection
+        if ollama_client and await ollama_client.health_check():
+            health_status["ollama"] = "healthy"
+        else:
+            health_status["ollama"] = "unhealthy"
+            
+        # Check Qdrant connection
+        if qdrant_manager and await qdrant_manager.health_check():
+            health_status["qdrant"] = "healthy"
+        else:
+            health_status["qdrant"] = "unhealthy"
+            
+        # Check file system
+        if file_manager and file_manager.health_check():
+            health_status["file_system"] = "healthy"
+        else:
+            health_status["file_system"] = "unhealthy"
+            
+        # Overall health
+        if all(status == "healthy" for status in health_status.values()):
+            return {"status": "healthy", "details": health_status}
+        else:
+            return {"status": "degraded", "details": health_status}
+            
+    except Exception as e:
+        logger.error(f"Health check failed: {str(e)}")
+        health_status["service"] = "unhealthy"
+        return {"status": "unhealthy", "details": health_status, "error": str(e)}
+
+
+@app.post("/tag-image")
+async def tag_image(
+    image: UploadFile = File(...),
+    telegram_metadata: str = Form(...)
+):
+    """
+    Main endpoint to receive image and Telegram metadata from teleaiagent
+    
+    Args:
+        image: The image file to process
+        telegram_metadata: JSON string containing Telegram message metadata
+        
+    Returns:
+        JSON response with processing results
+    """
+    logger.info("📸 Received image tagging request", 
+               filename=image.filename, 
+               content_type=image.content_type)
+    
+    try:
+        # Validate image
+        if not image.content_type or not image.content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="File must be an image")
+            
+        # Check file size
+        image_data = await image.read()
+        if len(image_data) > Config.MAX_IMAGE_SIZE_MB * 1024 * 1024:
+            raise HTTPException(
+                status_code=413, 
+                detail=f"Image too large. Maximum size: {Config.MAX_IMAGE_SIZE_MB}MB"
+            )
+        
+        # Process image with handler
+        result = await image_handler.process_image(image_data, telegram_metadata)
+        
+        logger.info("✅ Image processing completed successfully",
+                   tags=result.get('tags', []),
+                   file_path=result.get('file_path'))
+        
+        return JSONResponse(content={
+            "status": "success",
+            "message": "Image processed and tagged successfully",
+            "result": result
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Image processing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@app.get("/stats")
+async def get_stats():
+    """Get service statistics"""
+    try:
+        stats = {
+            "service": {
+                "name": Config.SERVICE_NAME,
+                "version": "1.0.0",
+                "status": "running"
+            }
+        }
+        
+        # Add Qdrant stats if available
+        if qdrant_manager:
+            qdrant_stats = await qdrant_manager.get_stats()
+            stats["qdrant"] = qdrant_stats
+            
+        # Add file system stats if available  
+        if file_manager:
+            file_stats = file_manager.get_stats()
+            stats["storage"] = file_stats
+            
+        return stats
+        
+    except Exception as e:
+        logger.error(f"Failed to get stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
+
+
+def main():
+    """Main function to start the service"""
+    # Configure basic logging for uvicorn
+    logging.basicConfig(level=getattr(logging, Config.LOG_LEVEL))
+    
+    logger.info(f"🚀 Starting Image Tagger Microservice on {Config.SERVICE_HOST}:{Config.SERVICE_PORT}")
+    
+    # Run the FastAPI app with uvicorn
+    uvicorn.run(
+        "main:app",
+        host=Config.SERVICE_HOST,
+        port=Config.SERVICE_PORT,
+        reload=False,  # Disable in production
+        log_level=Config.LOG_LEVEL.lower(),
+        access_log=True
+    )
+
+
+if __name__ == "__main__":
+    main()
