@@ -45,10 +45,7 @@ class TaggerClient:
         if not self.session:
             raise Exception("Tagger client not initialized")
             
-        logger.info("📤 Sending image to tagger service", 
-                   filename=filename,
-                   size_bytes=len(image_data),
-                   chat_id=telegram_metadata.get('chat_id'))
+        logger.info(f"📤 Sending image to tagger service, filename={filename}, size_bytes={len(image_data)}, chat_id={telegram_metadata.get('chat_id')}")
         
         try:
             # Prepare form data
@@ -63,15 +60,11 @@ class TaggerClient:
             async with self.session.post(f"{self.tagger_url}/tag-image", data=data) as response:
                 if response.status == 200:
                     result = await response.json()
-                    logger.info("✅ Image processed by tagger service",
-                               tags=result.get('result', {}).get('tags', []),
-                               document_id=result.get('result', {}).get('document_id'))
+                    logger.info(f"✅ Image processed by tagger service - tags: {result.get('result', {}).get('tags', [])}, document_id: {result.get('result', {}).get('document_id')}")
                     return result
                 else:
                     error_text = await response.text()
-                    logger.error("❌ Tagger service error", 
-                                status=response.status,
-                                error=error_text)
+                    logger.error(f"❌ Tagger service error - status: {response.status}, error: {error_text}")
                     raise Exception(f"Tagger service error: {response.status} - {error_text}")
                     
         except Exception as e:

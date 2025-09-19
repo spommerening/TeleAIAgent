@@ -63,10 +63,7 @@ class FileManager:
         
         full_path = date_dir / filename
         
-        logger.info("📁 Generated storage path", 
-                   path=str(full_path),
-                   date_structure=year_month_day,
-                   filename=filename)
+        logger.info(f"📁 Generated storage path - path: {str(full_path)}, date_structure: {year_month_day}, filename: {filename}")
         
         return str(full_path)
         
@@ -81,9 +78,7 @@ class FileManager:
         Returns:
             Dictionary with storage information
         """
-        logger.info("💾 Storing image to filesystem", 
-                   path=file_path,
-                   size_bytes=len(image_data))
+        logger.info(f"💾 Storing image to filesystem - path: {file_path}, size_bytes: {len(image_data)}")
         
         try:
             # Ensure parent directory exists
@@ -104,16 +99,12 @@ class FileManager:
                 'success': True
             }
             
-            logger.info("✅ Image stored successfully", 
-                       path=file_path,
-                       size_bytes=file_size)
+            logger.info(f"✅ Image stored successfully - path: {file_path}, size_bytes: {file_size}")
             
             return storage_info
             
         except Exception as e:
-            logger.error("❌ Failed to store image", 
-                        path=file_path,
-                        error=str(e))
+            logger.error(f"❌ Failed to store image - path: {file_path}, error: {str(e)}")
             raise
             
     def get_storage_stats(self) -> Dict:
@@ -199,7 +190,7 @@ class FileManager:
                 'cutoff_days': days_old
             }
             
-            logger.info("✅ File cleanup completed", **cleanup_result)
+            logger.info(f"✅ File cleanup completed - {cleanup_result}")
             return cleanup_result
             
         except Exception as e:

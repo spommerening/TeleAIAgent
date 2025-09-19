@@ -9,6 +9,9 @@ pyttsx3==2.90
 aiohttp==3.10.10
 aiofiles~=23.2.1
 
+# Image Processing
+Pillow==10.4.0
+
 # AI/ML Libraries
 openai==1.54.3
 langchain==0.3.7

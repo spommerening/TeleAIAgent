@@ -38,7 +38,7 @@ class Config:
     5. Style or artistic elements
     
     Return only the tags as a comma-separated list, no explanations.
-    Example: "person, outdoor, sunset, walking, peaceful, nature, golden light"
+    Always return tags in German language.
     """
     
     # File storage configuration

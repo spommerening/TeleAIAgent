@@ -8,6 +8,8 @@ import aiohttp
 import aiofiles
 import os
 import time
+import io
+from PIL import Image
 from config import Config
 from utils.tagger_client import TaggerClient
 
@@ -48,14 +50,17 @@ class FileHandler:
             download_url = f"https://api.telegram.org/file/bot{self.bot_token}/{file_info.file_path}"
             
             # Download image data
-            image_data = await self._download_image_data(download_url)
+            raw_image_data = await self._download_image_data(download_url)
+            
+            # Convert image to JPEG format
+            jpg_image_data = self._convert_to_jpeg(raw_image_data)
             
             # Prepare Telegram metadata
             telegram_metadata = self._extract_telegram_metadata(message, file_info, photo_id)
             
             # Send to tagger service for processing
             result = await self.tagger_client.process_image(
-                image_data=image_data,
+                image_data=jpg_image_data,
                 telegram_metadata=telegram_metadata,
                 filename=f"{photo_id}.jpg"
             )
@@ -123,6 +128,39 @@ class FileHandler:
             except Exception as e:
                 logger.error(f"Download error: {e}")
                 raise
+
+    def _convert_to_jpeg(self, image_data):
+        """Convert image to JPEG format regardless of input format"""
+        try:
+            # Open image from bytes
+            image = Image.open(io.BytesIO(image_data))
+            
+            # Get original format for logging
+            original_format = image.format or "Unknown"
+            logger.info(f"🔄 Converting image from {original_format} to JPEG")
+            
+            # Convert RGBA to RGB if necessary (for PNG with transparency)
+            if image.mode in ('RGBA', 'LA', 'P'):
+                # Create white background
+                background = Image.new('RGB', image.size, (255, 255, 255))
+                if image.mode == 'P':
+                    image = image.convert('RGBA')
+                background.paste(image, mask=image.split()[-1] if image.mode == 'RGBA' else None)
+                image = background
+            elif image.mode != 'RGB':
+                image = image.convert('RGB')
+            
+            # Save as JPEG
+            output_buffer = io.BytesIO()
+            image.save(output_buffer, format='JPEG', quality=95, optimize=True)
+            jpeg_data = output_buffer.getvalue()
+            
+            logger.info(f"✅ Image converted to JPEG - original: {len(image_data)} bytes, converted: {len(jpeg_data)} bytes")
+            return jpeg_data
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to convert image to JPEG, using original: {e}")
+            return image_data
 
     def _extract_telegram_metadata(self, message, file_info, file_id):
         """Extract Telegram message metadata for tagger service"""

@@ -50,7 +50,7 @@ async def lifespan(app: FastAPI):
         ollama_client = OllamaClient()
         qdrant_manager = QdrantManager()
         file_manager = FileManager()
-        image_handler = ImageHandler(ollama_client, qdrant_manager, file_manager)
+        image_handler = ImageHandler(ollama_client, file_manager, qdrant_manager)
         
         # Initialize connections
         await ollama_client.initialize()
@@ -146,9 +146,7 @@ async def tag_image(
     Returns:
         JSON response with processing results
     """
-    logger.info("📸 Received image tagging request", 
-               filename=image.filename, 
-               content_type=image.content_type)
+    logger.info(f"📸 Received image tagging request - filename: {image.filename}, content_type: {image.content_type}")
     
     try:
         # Validate image
@@ -166,9 +164,7 @@ async def tag_image(
         # Process image with handler
         result = await image_handler.process_image(image_data, telegram_metadata)
         
-        logger.info("✅ Image processing completed successfully",
-                   tags=result.get('tags', []),
-                   file_path=result.get('file_path'))
+        logger.info(f"✅ Image processing completed successfully - tags: {result.get('tags', [])}, file_path: {result.get('file_path')}")
         
         return JSONResponse(content={
             "status": "success",

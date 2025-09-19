@@ -159,6 +159,10 @@ class ContextManager:
     
     def _get_embedding(self, text):
         """Generate semantic embedding using SentenceTransformers or fallback to hash-based"""
+        # Handle None or empty text
+        if not text:
+            text = ""
+        
         if self.embedding_model is not None:
             try:
                 # Use SentenceTransformers for proper semantic embeddings
@@ -196,16 +200,21 @@ class ContextManager:
             # Extract message text
             if isinstance(message, dict):
                 user_name = message['from']['first_name']
-                text = message['text']
+                text = message.get('text') or message.get('caption', '')  # Handle None text
                 user_id = message['from']['id']
                 message_id = message['message_id']
                 is_bot = message['from'].get('is_bot', False)
             else:
                 user_name = message.from_user.first_name
-                text = message.text
+                text = getattr(message, 'text', None) or getattr(message, 'caption', '') or ''  # Handle None text
                 user_id = message.from_user.id
                 message_id = message.message_id
                 is_bot = message.from_user.is_bot
+                
+            # Skip storing if there's no meaningful text content
+            if not text.strip():
+                logger.debug(f"Skipping context storage for message without text content: {message_id}")
+                return
             
             # Unique ID for the document
             doc_id = f"chat_{chat_info['id']}_msg_{message_id}_{int(time.time())}"
@@ -227,6 +236,11 @@ class ContextManager:
             
             # Generate embedding for the text
             vector = self._get_embedding(text)
+            
+            # Safety check for vector
+            if not vector or not isinstance(vector, list):
+                logger.warning(f"Invalid vector generated for text: {text[:50]}...")
+                return
             
             # Create point
             point = PointStruct(

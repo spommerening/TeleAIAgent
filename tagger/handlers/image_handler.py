@@ -4,6 +4,7 @@ Coordinates image processing workflow: analysis, tagging, storage, and Qdrant in
 """
 
 import json
+import time
 from typing import Dict, List
 
 import logging
@@ -63,10 +64,9 @@ class ImageHandler:
             
             # Step 3: Store image to filesystem
             logger.info("💾 Step 3: Storing image to filesystem...")
-            stored_path = self.file_manager.store_image(
+            stored_path = await self.file_manager.store_image(
                 image_data=image_data,
-                storage_path=storage_path,
-                filename=filename
+                file_path=storage_path  # storage_path is already the full path including filename
             )
             
             # Step 4: Create enhanced metadata with tags and file path
@@ -75,7 +75,7 @@ class ImageHandler:
                 'tags': tags,
                 'image_path': stored_path,
                 'storage_path': storage_path,
-                'processed_at': self.file_manager.get_current_timestamp(),
+                'processed_at': time.strftime('%Y-%m-%d %H:%M:%S'),
                 'tag_count': len(tags)
             }
             
