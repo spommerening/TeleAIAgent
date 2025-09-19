@@ -47,7 +47,7 @@ services:
     ports:
       - "7777:7777"  # Expose tagger API port
     volumes:
-      - ./volumes/teleaiagent/images:/app/volume_images  # Shared volume for image storage
+      - ./volumes/images:/app/volume_images  # Shared volume for image storage
       - ./volumes/tagger/logs:/app/logs  # Separate logs for tagger
       - ./volumes/tagger/cache:/root/.cache  # Separate cache for tagger
     networks:

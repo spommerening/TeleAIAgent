@@ -22,8 +22,15 @@ class FileHandler:
         self.tagger_client = TaggerClient()
         
     async def initialize(self):
-        """Initialize tagger client"""
+        """Initialize tagger client and check service health"""
         await self.tagger_client.initialize()
+        
+        # Check if tagger service is available
+        is_healthy = await self.tagger_client.health_check()
+        if is_healthy:
+            logger.info("✅ Tagger service is healthy and ready")
+        else:
+            logger.warning("⚠️ Tagger service is not responding - images will be processed without tagging")
         
     async def handle_message(self, message):
         """Processes incoming files"""
@@ -58,6 +65,12 @@ class FileHandler:
             # Prepare Telegram metadata
             telegram_metadata = self._extract_telegram_metadata(message, file_info, photo_id)
             
+            # Check if tagger service is healthy before processing
+            is_healthy = await self.tagger_client.health_check()
+            if not is_healthy:
+                logger.warning("⚠️ Tagger service is not healthy, skipping tagging for this image")
+                return
+            
             # Send to tagger service for processing
             result = await self.tagger_client.process_image(
                 image_data=jpg_image_data,
@@ -65,10 +78,13 @@ class FileHandler:
                 filename=f"{photo_id}.jpg"
             )
             
-            logger.info(f"✅ Photo processed by tagger service: {result.get('result', {}).get('tags', [])}")
+            if result:
+                logger.info(f"✅ Photo processed by tagger service: {result.get('result', {}).get('tags', [])}")
+            else:
+                logger.warning("⚠️ Tagger service failed to process image, continuing without tagging")
             
         except Exception as e:
-            logger.error(f"Error processing photo with tagger service: {e}", exc_info=True)
+            logger.error(f"❌ Error processing photo with tagger service: {e}", exc_info=True)
     
     async def _download_documents(self, message):
         """Downloads documents"""

@@ -38,6 +38,9 @@ volumes/tagger/cache/**
 volumes/tagger/logs/**
 !volumes/tagger/logs/__PLACEHOLDER__
 
+volumes/images/**
+!volumes/images/__PLACEHOLDER__
+
 # Virtual environment (Python3)
 venv/**
 **/__pycache__/**
