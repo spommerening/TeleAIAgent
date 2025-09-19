@@ -13,6 +13,7 @@ from fastapi import HTTPException
 from utils.ollama_client import OllamaClient
 from utils.file_manager import FileManager
 from utils.qdrant_client import QdrantManager
+from utils.tag_processor import TagProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,8 @@ class ImageHandler:
         self.ollama_client = ollama_client
         self.file_manager = file_manager
         self.qdrant_manager = qdrant_manager
-        logger.info("🎯 Image Handler initialized")
+        self.tag_processor = TagProcessor()
+        logger.info("🎯 Enhanced Image Handler initialized with advanced tag processing")
     
     async def process_image(self, 
                           image_data: bytes, 
@@ -52,10 +54,28 @@ class ImageHandler:
             
             logger.info(f"🚀 Starting complete image processing workflow, chat_id={metadata.get('chat_id')}, user_name={metadata.get('user_name')}, message_id={metadata.get('message_id')}")
             
-            # Step 1: Analyze image with Ollama to generate tags
-            logger.info("🤖 Step 1: Analyzing image with Ollama...")
-            tags = await self.ollama_client.analyze_image(image_data)
-            logger.info(f"✅ Image analysis completed, tags={tags}, tag_count={len(tags)}")
+            # Step 1: Enhanced multi-pass image analysis
+            logger.info("🤖 Step 1: Enhanced multi-pass image analysis with Ollama...")
+            
+            # Perform multi-pass analysis for better tag quality
+            analysis_results = await self.ollama_client.analyze_image_multi_pass(image_data)
+            
+            # Process and enhance tags with quality filtering
+            tag_processing_result = self.tag_processor.merge_multi_pass_tags(
+                primary_result=self.tag_processor.process_tags(analysis_results['primary_tags']),
+                artistic_tags=analysis_results.get('artistic_tags', []),
+                contextual_tags=analysis_results.get('contextual_tags', [])
+            )
+            
+            tags = tag_processing_result['tags']
+            tag_metadata = {
+                'quality_score': tag_processing_result['quality_score'],
+                'categorized_tags': tag_processing_result.get('categorized_tags', {}),
+                'multi_pass_info': tag_processing_result.get('sources', {}),
+                'model_used': analysis_results.get('model_used', 'unknown')
+            }
+            
+            logger.info(f"✅ Enhanced analysis completed: {len(tags)} high-quality tags (quality: {tag_processing_result['quality_score']})")
             
             # Step 2: Generate storage path with year/month/day structure
             logger.info("📁 Step 2: Generating storage path...")
@@ -69,14 +89,16 @@ class ImageHandler:
                 file_path=storage_path  # storage_path is already the full path including filename
             )
             
-            # Step 4: Create enhanced metadata with tags and file path
+            # Step 4: Create comprehensive metadata with enhanced tagging information
             enhanced_metadata = {
                 **metadata,
                 'tags': tags,
                 'image_path': stored_path,
                 'storage_path': storage_path,
                 'processed_at': time.strftime('%Y-%m-%d %H:%M:%S'),
-                'tag_count': len(tags)
+                'tag_count': len(tags),
+                'tagging_metadata': tag_metadata,
+                'enhanced_tagging': True
             }
             
             # Step 5: Store in Qdrant for semantic search
@@ -88,14 +110,20 @@ class ImageHandler:
             )
             logger.info(f"✅ Tags stored in Qdrant, document_id={doc_id}")
             
-            # Return comprehensive result
+            # Return comprehensive result with enhanced tagging information
             result = {
                 'success': True,
                 'document_id': doc_id,
                 'storage_path': stored_path,
                 'tags': tags,
                 'tag_count': len(tags),
-                'metadata': enhanced_metadata
+                'metadata': enhanced_metadata,
+                'tag_quality': tag_metadata['quality_score'],
+                'categorized_tags': tag_metadata['categorized_tags'],
+                'model_info': {
+                    'model_used': tag_metadata['model_used'],
+                    'multi_pass': tag_metadata.get('multi_pass_info', {})
+                }
             }
             
             logger.info("🎉 Complete image processing workflow finished successfully")
