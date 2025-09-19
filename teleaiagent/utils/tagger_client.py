@@ -22,16 +22,16 @@ class TaggerClient:
         
     async def initialize(self):
         """Initialize the HTTP session"""
-        # More reasonable timeout: 60 seconds total, 30 seconds connection, 30 seconds socket read
+        # Long timeout for AI image processing: up to 10 minutes total
         timeout = aiohttp.ClientTimeout(
-            total=60,  # Total timeout reduced to 1 minute
-            connect=30,  # Connection timeout
-            sock_read=30  # Socket read timeout
+            total=660,  # 11 minutes total (10 min processing + 1 min buffer)
+            connect=30,  # Connection timeout (keep short for quick failure detection)
+            sock_read=None  # No socket read timeout for long-running AI operations
         )
         connector = aiohttp.TCPConnector(
-            limit=10,  # Connection pool size
-            limit_per_host=5,  # Max connections per host
-            keepalive_timeout=30,  # Keep alive timeout
+            limit=5,  # Smaller connection pool for long-running operations
+            limit_per_host=2,  # Max connections per host (reduced for long operations)
+            keepalive_timeout=60,  # Longer keep alive for sustained connections
             enable_cleanup_closed=True  # Clean up closed connections
         )
         self.session = aiohttp.ClientSession(
@@ -39,23 +39,24 @@ class TaggerClient:
             connector=connector,
             headers={'User-Agent': 'TeleAI-Agent/1.0'}
         )
-        logger.info(f"🔧 Tagger client initialized, url={self.tagger_url}")
+        logger.info(f"🔧 Tagger client initialized, url={self.tagger_url} (timeout: 11 minutes for AI processing)")
         
     async def process_image(
         self,
         image_data: bytes,
         telegram_metadata: Dict,
         filename: str = "image.jpg",
-        max_retries: int = 2
+        max_retries: int = 1
     ) -> Optional[Dict]:
         """
         Send image to tagger service for processing with retry logic
+        Designed for long-running AI operations (up to 10 minutes per attempt)
         
         Args:
             image_data: Raw image bytes
             telegram_metadata: Metadata from Telegram message
             filename: Original filename
-            max_retries: Maximum number of retry attempts
+            max_retries: Maximum number of retry attempts (default: 1 for 10-min operations)
             
         Returns:
             Response from tagger service or None if all retries failed
@@ -92,8 +93,8 @@ class TaggerClient:
                             return None
                         
                         if attempt < max_retries:
-                            wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
-                            logger.warning(f"⏳ Retrying in {wait_time}s (attempt {attempt + 1}/{max_retries + 1})")
+                            wait_time = 60  # Fixed 1-minute wait for long-running AI operations
+                            logger.warning(f"⏳ Retrying in {wait_time}s (attempt {attempt + 1}/{max_retries + 1}) - AI processing can take up to 10 minutes")
                             await asyncio.sleep(wait_time)
                             continue
                         else:
@@ -101,14 +102,14 @@ class TaggerClient:
                             return None
                             
             except asyncio.TimeoutError:
-                logger.error(f"⏱️ Timeout error on attempt {attempt + 1}/{max_retries + 1}")
+                logger.error(f"⏱️ Timeout error after 11 minutes on attempt {attempt + 1}/{max_retries + 1}")
                 if attempt < max_retries:
-                    wait_time = 2 ** attempt
-                    logger.warning(f"⏳ Retrying after timeout in {wait_time}s")
+                    wait_time = 120  # 2-minute wait after timeout for AI processing
+                    logger.warning(f"⏳ Retrying after timeout in {wait_time}s - AI processing may need more time")
                     await asyncio.sleep(wait_time)
                     continue
                 else:
-                    logger.error(f"❌ All retry attempts failed due to timeout")
+                    logger.error(f"❌ All retry attempts failed due to timeout (AI processing took longer than 11 minutes)")
                     return None
                     
             except asyncio.CancelledError:
@@ -119,7 +120,7 @@ class TaggerClient:
             except aiohttp.ClientError as e:
                 logger.error(f"🌐 Client error on attempt {attempt + 1}: {str(e)}")
                 if attempt < max_retries:
-                    wait_time = 2 ** attempt
+                    wait_time = 60  # 1-minute wait for client errors
                     logger.warning(f"⏳ Retrying after client error in {wait_time}s")
                     await asyncio.sleep(wait_time)
                     continue
@@ -130,7 +131,7 @@ class TaggerClient:
             except Exception as e:
                 logger.error(f"❌ Unexpected error on attempt {attempt + 1}: {str(e)}")
                 if attempt < max_retries:
-                    wait_time = 2 ** attempt
+                    wait_time = 60  # 1-minute wait for unexpected errors
                     logger.warning(f"⏳ Retrying after error in {wait_time}s")
                     await asyncio.sleep(wait_time)
                     continue
@@ -216,8 +217,8 @@ class TaggerClient:
             return False
             
         try:
-            # Use a shorter timeout for health checks
-            timeout = aiohttp.ClientTimeout(total=10)
+            # Use a reasonable timeout for health checks (30s to account for model loading)
+            timeout = aiohttp.ClientTimeout(total=30)
             async with self.session.get(f"{self.tagger_url}/health", timeout=timeout) as response:
                 return response.status == 200
         except (asyncio.TimeoutError, asyncio.CancelledError, aiohttp.ClientError, Exception):
