@@ -9,7 +9,7 @@ FROM python:3.11-slim-bookworm
 WORKDIR /app
 
 # Copy the requirements file first to leverage Docker cache
-COPY src/requirements.txt .
+COPY teleaiagent/requirements.txt .
 
 # Install Python dependencies
 RUN pip3 install --no-cache-dir -r requirements.txt
@@ -19,7 +19,7 @@ RUN apt-get update && apt-get autoremove -y && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy the entire project into the container
-COPY src/ .
+COPY teleaiagent/ .
 
 # Set environment variables for Docker runtime
 ENV PYTHONUNBUFFERED=1
