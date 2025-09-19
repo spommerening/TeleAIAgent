@@ -13,7 +13,8 @@ aiofiles~=23.2.1
 openai==1.54.3
 langchain==0.3.7
 langchain-community==0.3.7
-chromadb==0.5.20
+qdrant-client==1.11.0
+# Note: PyTorch CPU-only and sentence-transformers are installed separately in Dockerfile
 
 # Web Scraping & Search
 duckduckgo-search==6.3.0

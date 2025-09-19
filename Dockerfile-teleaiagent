@@ -11,8 +11,13 @@ WORKDIR /app
 # Copy the requirements file first to leverage Docker cache
 COPY teleaiagent/requirements.txt .
 
-# Install Python dependencies
-RUN pip3 install --no-cache-dir -r requirements.txt
+# Install CPU-only PyTorch first to avoid CUDA dependencies
+# Using compatible versions: PyTorch 2.4.0 with matching torchvision and torchaudio
+RUN pip3 install --no-cache-dir torch==2.4.0+cpu torchvision==0.19.0+cpu torchaudio==2.4.0+cpu --index-url https://download.pytorch.org/whl/cpu
+
+# Install remaining Python dependencies
+RUN pip3 install --no-cache-dir sentence-transformers==3.0.1 && \
+    pip3 install --no-cache-dir -r requirements.txt
 
 # Remove build dependencies to reduce image size
 RUN apt-get update && apt-get autoremove -y && \

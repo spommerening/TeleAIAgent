@@ -51,10 +51,11 @@ class Config:
     MAX_CONTEXT_LINES = 100
     CONTEXT_DIR = "context"
     
-    # ChromaDB configuration
-    CHROMADB_HOST = "chromadb"  # Docker service name
-    CHROMADB_PORT = 8000
-    CHROMADB_COLLECTION_NAME = "chat_context"
+    # Qdrant configuration
+    QDRANT_HOST = "qdrant"  # Docker service name
+    QDRANT_PORT = 6333  # REST API port
+    QDRANT_GRPC_PORT = 6334  # gRPC API port (optional)
+    QDRANT_COLLECTION_NAME = "chat_context"
     
     # File directories
     IMAGES_DIR = "images"
@@ -91,7 +92,7 @@ class Config:
     CONTEXT_SEARCH_ENABLED = True
     CONTEXT_MAX_TOKENS = 1500  # Maximum token count for context
     CONTEXT_SEARCH_RESULTS = 15  # Number of search results (more for User+Bot balance)
-    CONTEXT_MIN_SIMILARITY = 0.05  # Minimum similarity (0-1) - optimized for User+Bot balance
+    CONTEXT_MIN_SIMILARITY = 0.3  # Minimum similarity (0-1) - tuned for SentenceTransformers embeddings
     CONTEXT_INCLUDE_BOT_RESPONSES = True  # Include bot responses in context
     CONTEXT_BOT_WEIGHT = 1.1  # Weight for bot responses (slightly preferred)
     

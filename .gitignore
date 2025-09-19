@@ -2,8 +2,8 @@
 .env
 
 # Volume directories - ignore all content except placeholders (recursive)
-volumes/chromadb/chroma/**
-!volumes/chromadb/chroma/__PLACEHOLDER__
+volumes/qdrant/storage/**
+!volumes/qdrant/storage/__PLACEHOLDER__
 
 volumes/ollama/**
 !volumes/ollama/__PLACEHOLDER__

@@ -12,25 +12,59 @@ from collections import deque
 from config import Config
 
 try:
-    import chromadb
-    from chromadb.config import Settings
-    CHROMADB_AVAILABLE = True
+    from qdrant_client import QdrantClient
+    from qdrant_client.http.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue, Range
+    from qdrant_client.http.exceptions import UnexpectedResponse
+    QDRANT_AVAILABLE = True
 except ImportError:
-    CHROMADB_AVAILABLE = False
+    QDRANT_AVAILABLE = False
+
+try:
+    from sentence_transformers import SentenceTransformer
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
 class ContextManager:
     def __init__(self):
         self.max_lines = Config.MAX_CONTEXT_LINES
-        self.chroma_client = None
-        self.chroma_collection = None
-        self._init_chromadb()
+        self.qdrant_client = None
+        self.collection_exists = False
+        self.embedding_model = None
+        self._init_embedding_model()
+        self._init_qdrant()
     
-    def _init_chromadb(self):
-        """Initializes ChromaDB client and collection with retry logic"""
-        if not CHROMADB_AVAILABLE:
-            logger.warning("ChromaDB package not available - Context will only be stored in files")
+    def _init_embedding_model(self):
+        """Initialize the embedding model"""
+        if SENTENCE_TRANSFORMERS_AVAILABLE:
+            try:
+                # Use a lightweight but effective model
+                logger.info("🔄 Loading SentenceTransformer embedding model (CPU-optimized)...")
+                
+                # Initialize with CPU-only device map to ensure no GPU usage
+                self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
+                
+                # Check if we're actually using CPU
+                import torch
+                if torch.cuda.is_available():
+                    logger.info("🔧 GPU detected but using CPU-only mode for compatibility")
+                else:
+                    logger.info("💻 Running in CPU-only mode (no GPU detected)")
+                    
+                logger.info("✅ SentenceTransformer model loaded successfully on CPU")
+            except Exception as e:
+                logger.error(f"❌ Failed to load SentenceTransformer model: {e}")
+                self.embedding_model = None
+        else:
+            logger.warning("📦 SentenceTransformers not available - using fallback hash-based embeddings")
+            self.embedding_model = None
+    
+    def _init_qdrant(self):
+        """Initializes Qdrant client and collection with retry logic"""
+        if not QDRANT_AVAILABLE:
+            logger.warning("Qdrant package not available - Context will only be stored in files")
             return
             
         max_retries = 5
@@ -38,43 +72,53 @@ class ContextManager:
         
         for attempt in range(max_retries):
             try:
-                logger.info(f"ChromaDB connection attempt {attempt + 1}/{max_retries} to {Config.CHROMADB_HOST}:{Config.CHROMADB_PORT}")
+                logger.info(f"Qdrant connection attempt {attempt + 1}/{max_retries} to {Config.QDRANT_HOST}:{Config.QDRANT_PORT}")
                 
-                # Create ChromaDB client
-                self.chroma_client = chromadb.HttpClient(
-                    host=Config.CHROMADB_HOST,
-                    port=Config.CHROMADB_PORT,
-                    settings=Settings(anonymized_telemetry=False)
+                # Create Qdrant client
+                self.qdrant_client = QdrantClient(
+                    host=Config.QDRANT_HOST,
+                    port=Config.QDRANT_PORT,
                 )
                 
                 # Test the connection
-                self.chroma_client.heartbeat()
+                self.qdrant_client.get_collections()
                 
                 # Create or get collection
                 try:
-                    self.chroma_collection = self.chroma_client.get_collection(
-                        name=Config.CHROMADB_COLLECTION_NAME
-                    )
-                    logger.info("✅ ChromaDB Collection found and connected")
-                except:
-                    self.chroma_collection = self.chroma_client.create_collection(
-                        name=Config.CHROMADB_COLLECTION_NAME,
-                        metadata={"description": "Chat context storage"}
-                    )
-                    logger.info("✅ ChromaDB Collection successfully created")
+                    collections = self.qdrant_client.get_collections()
+                    collection_names = [col.name for col in collections.collections]
+                    
+                    if Config.QDRANT_COLLECTION_NAME in collection_names:
+                        logger.info("✅ Qdrant Collection found and connected")
+                        self.collection_exists = True
+                    else:
+                        # Create collection with vector configuration
+                        # Using SentenceTransformers all-MiniLM-L6-v2 embedding size (384 dimensions)
+                        self.qdrant_client.create_collection(
+                            collection_name=Config.QDRANT_COLLECTION_NAME,
+                            vectors_config=VectorParams(size=384, distance=Distance.COSINE),
+                        )
+                        logger.info("✅ Qdrant Collection successfully created")
+                        self.collection_exists = True
+                
+                except Exception as e:
+                    logger.error(f"Error with collection management: {e}")
+                    self.qdrant_client = None
+                    self.collection_exists = False
+                    continue
                 
                 return  # Success - exit function
                     
             except Exception as e:
-                logger.warning(f"ChromaDB connection attempt {attempt + 1} failed: {e}")
-                self.chroma_client = None
-                self.chroma_collection = None
+                logger.warning(f"Qdrant connection attempt {attempt + 1} failed: {e}")
+                self.qdrant_client = None
+                self.collection_exists = False
                 
                 if attempt < max_retries - 1:  # Not the last attempt
                     logger.info(f"Retry in {retry_delay} seconds...")
                     time.sleep(retry_delay)
                 else:
-                    logger.error(f"❌ ChromaDB not reachable after {max_retries} attempts - Context will only be stored in files")
+                    logger.error(f"❌ Qdrant not reachable after {max_retries} attempts - Context will only be stored in files")
         
     def store_context(self, message, timestamp=None):
         """Stores context of a message in file and ChromaDB"""
@@ -110,12 +154,42 @@ class ContextManager:
         except Exception as e:
             logger.error(f"Error writing to file: {e}")
         
-        # 2. Store in parallel in ChromaDB
-        self._store_context_chromadb(message, timestamp_str, chat_info)
+        # 2. Store in parallel in Qdrant
+        self._store_context_qdrant(message, timestamp_str, chat_info)
     
-    def _store_context_chromadb(self, message, timestamp_str, chat_info):
-        """Stores context in ChromaDB"""
-        if not self.chroma_collection:
+    def _get_embedding(self, text):
+        """Generate semantic embedding using SentenceTransformers or fallback to hash-based"""
+        if self.embedding_model is not None:
+            try:
+                # Use SentenceTransformers for proper semantic embeddings
+                embedding = self.embedding_model.encode(text, convert_to_tensor=False)
+                return embedding.tolist()
+            except Exception as e:
+                logger.error(f"Error generating embedding with SentenceTransformers: {e}")
+                # Fall back to hash-based embedding
+        
+        # Fallback: hash-based embedding (for compatibility when SentenceTransformers fails)
+        import hashlib
+        import numpy as np
+        
+        logger.debug("Using fallback hash-based embedding")
+        hash_obj = hashlib.md5(text.encode())
+        hash_bytes = hash_obj.digest()
+        
+        # Create a 384-dimensional vector (matching all-MiniLM-L6-v2 output size)
+        seed = int.from_bytes(hash_bytes[:4], byteorder='big')
+        np.random.seed(seed)
+        vector = np.random.randn(384).astype(np.float32)
+        # Normalize vector
+        norm = np.linalg.norm(vector)
+        if norm > 0:
+            vector = vector / norm
+        
+        return vector.tolist()
+
+    def _store_context_qdrant(self, message, timestamp_str, chat_info):
+        """Stores context in Qdrant"""
+        if not self.qdrant_client or not self.collection_exists:
             return
             
         try:
@@ -136,8 +210,8 @@ class ContextManager:
             # Unique ID for the document
             doc_id = f"chat_{chat_info['id']}_msg_{message_id}_{int(time.time())}"
             
-            # Create metadata
-            metadata = {
+            # Create metadata (payload in Qdrant terminology)
+            payload = {
                 "chat_id": str(chat_info['id']),
                 "chat_title": chat_info['title'],
                 "chat_type": chat_info['type'],
@@ -147,20 +221,30 @@ class ContextManager:
                 "timestamp": timestamp_str,
                 "date": time.strftime('%Y-%m-%d', time.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')),
                 "is_bot": str(is_bot),
-                "message_type": "bot_response" if is_bot else "user_message"
+                "message_type": "bot_response" if is_bot else "user_message",
+                "text": text  # Store text in payload for retrieval
             }
             
-            # Store in ChromaDB
-            self.chroma_collection.add(
-                documents=[text],
-                metadatas=[metadata],
-                ids=[doc_id]
+            # Generate embedding for the text
+            vector = self._get_embedding(text)
+            
+            # Create point
+            point = PointStruct(
+                id=hash(doc_id) & 0x7FFFFFFF,  # Convert to positive integer ID
+                vector=vector,
+                payload=payload
             )
             
-            logger.debug(f"Context stored in ChromaDB: {doc_id}")
+            # Store in Qdrant
+            self.qdrant_client.upsert(
+                collection_name=Config.QDRANT_COLLECTION_NAME,
+                points=[point]
+            )
+            
+            logger.debug(f"Context stored in Qdrant: {doc_id}")
             
         except Exception as e:
-            logger.error(f"Error storing in ChromaDB: {e}")
+            logger.error(f"Error storing in Qdrant: {e}")
     
     def load_chat_context(self, message):
         """Loads chat context for a message from file"""
@@ -177,31 +261,41 @@ class ContextManager:
             logger.error(f"Error loading context: {e}")
             return ""
     
-    def load_chat_context_chromadb(self, message, limit=None):
-        """Loads chat context from ChromaDB (Legacy - for compatibility only)"""
-        if not self.chroma_collection:
+    def load_chat_context_qdrant(self, message, limit=None):
+        """Loads chat context from Qdrant (Legacy - for compatibility only)"""
+        if not self.qdrant_client or not self.collection_exists:
             return ""
             
         chat_info = self._extract_chat_info(message)
         
         try:
             # Query all messages for this chat
-            results = self.chroma_collection.get(
-                where={"chat_id": str(chat_info['id'])},
-                limit=limit or self.max_lines
+            response = self.qdrant_client.scroll(
+                collection_name=Config.QDRANT_COLLECTION_NAME,
+                scroll_filter=Filter(
+                    must=[
+                        FieldCondition(
+                            key="chat_id",
+                            match=MatchValue(value=str(chat_info['id']))
+                        )
+                    ]
+                ),
+                limit=limit or self.max_lines,
+                with_payload=True,
+                with_vectors=False
             )
             
-            if not results['documents']:
+            if not response[0]:  # No points found
                 return ""
             
             # Sort messages by timestamp
             messages = []
-            for i, doc in enumerate(results['documents']):
-                metadata = results['metadatas'][i]
+            for point in response[0]:
+                payload = point.payload
                 messages.append({
-                    'timestamp': metadata['timestamp'],
-                    'user_name': metadata['user_name'],
-                    'text': doc
+                    'timestamp': payload['timestamp'],
+                    'user_name': payload['user_name'],
+                    'text': payload['text']
                 })
             
             # Sort by timestamp
@@ -215,44 +309,69 @@ class ContextManager:
             return "\n".join(context_lines)
             
         except Exception as e:
-            logger.error(f"Error loading from ChromaDB: {e}")
+            logger.error(f"Error loading from Qdrant: {e}")
             return ""
     
-    def load_relevant_context_chromadb(self, message, question):
+    def load_relevant_context_qdrant(self, message, question):
         """Loads relevant chat context based on semantic search with token limiting"""
-        if not Config.CONTEXT_SEARCH_ENABLED or not self.chroma_collection:
-            logger.info("Semantic context search disabled or ChromaDB not available")
+        if not Config.CONTEXT_SEARCH_ENABLED or not self.qdrant_client or not self.collection_exists:
+            logger.info("Semantic context search disabled or Qdrant not available")
             return ""
             
         chat_info = self._extract_chat_info(message)
         
         try:
             # Debug: First retrieve all documents for this chat
-            all_docs = self.chroma_collection.get(
-                where={"chat_id": str(chat_info['id'])}
+            all_response = self.qdrant_client.scroll(
+                collection_name=Config.QDRANT_COLLECTION_NAME,
+                scroll_filter=Filter(
+                    must=[
+                        FieldCondition(
+                            key="chat_id",
+                            match=MatchValue(value=str(chat_info['id']))
+                        )
+                    ]
+                ),
+                limit=10000,  # Large limit to get all for counting
+                with_payload=True,
+                with_vectors=False
             )
-            total_docs = len(all_docs['documents']) if all_docs['documents'] else 0
+            
+            total_docs = len(all_response[0])
             
             # Count Bot vs User messages in database
             bot_docs = 0
             user_docs = 0
-            if all_docs['metadatas']:
-                for metadata in all_docs['metadatas']:
-                    if metadata.get('is_bot', 'False') == 'True':
-                        bot_docs += 1
-                    else:
-                        user_docs += 1
+            for point in all_response[0]:
+                payload = point.payload
+                if payload.get('is_bot', 'False') == 'True':
+                    bot_docs += 1
+                else:
+                    user_docs += 1
             
             logger.info(f"Chat {chat_info['id']}: {total_docs} documents total ({user_docs} User, {bot_docs} Bot)")
             
+            # Generate embedding for the question
+            question_vector = self._get_embedding(question)
+            
             # Semantic search for relevant messages
-            results = self.chroma_collection.query(
-                query_texts=[question],
-                where={"chat_id": str(chat_info['id'])},
-                n_results=Config.CONTEXT_SEARCH_RESULTS
+            search_results = self.qdrant_client.search(
+                collection_name=Config.QDRANT_COLLECTION_NAME,
+                query_vector=question_vector,
+                query_filter=Filter(
+                    must=[
+                        FieldCondition(
+                            key="chat_id",
+                            match=MatchValue(value=str(chat_info['id']))
+                        )
+                    ]
+                ),
+                limit=Config.CONTEXT_SEARCH_RESULTS,
+                with_payload=True,
+                with_vectors=False
             )
             
-            if not results['documents'] or not results['documents'][0]:
+            if not search_results:
                 logger.info("No relevant context documents found")
                 return ""
             
@@ -262,16 +381,17 @@ class ContextManager:
             user_count = 0
             filtered_out = 0
             
-            logger.debug(f"Analyzing {len(results['documents'][0])} search results...")
+            logger.debug(f"Analyzing {len(search_results)} search results...")
             
-            for i, doc in enumerate(results['documents'][0]):
-                distance = results['distances'][0][i] if results['distances'] else 0
-                similarity = 1 - distance  # ChromaDB returns distance, we want similarity
-                metadata = results['metadatas'][0][i]
-                is_bot = metadata.get('is_bot', 'False') == 'True'
-                message_type = metadata.get('message_type', 'user_message')
+            for result in search_results:
+                # Qdrant returns score (similarity), not distance
+                similarity = result.score
+                payload = result.payload
+                text = payload['text']
+                is_bot = payload.get('is_bot', 'False') == 'True'
+                message_type = payload.get('message_type', 'user_message')
                 
-                logger.debug(f"Document {i}: similarity={similarity:.3f}, is_bot={is_bot}, threshold={Config.CONTEXT_MIN_SIMILARITY}")
+                logger.debug(f"Document: similarity={similarity:.3f}, is_bot={is_bot}, threshold={Config.CONTEXT_MIN_SIMILARITY}")
                 
                 # Only messages above the similarity threshold
                 if similarity >= Config.CONTEXT_MIN_SIMILARITY:
@@ -280,15 +400,15 @@ class ContextManager:
                     if is_bot and Config.CONTEXT_INCLUDE_BOT_RESPONSES:
                         weighted_similarity *= Config.CONTEXT_BOT_WEIGHT
                         bot_count += 1
-                        logger.debug(f"Bot message accepted: {doc[:50]}...")
+                        logger.debug(f"Bot message accepted: {text[:50]}...")
                     else:
                         user_count += 1
-                        logger.debug(f"User message accepted: {doc[:50]}...")
+                        logger.debug(f"User message accepted: {text[:50]}...")
                     
                     relevant_messages.append({
-                        'timestamp': metadata['timestamp'],
-                        'user_name': metadata['user_name'],
-                        'text': doc,
+                        'timestamp': payload['timestamp'],
+                        'user_name': payload['user_name'],
+                        'text': text,
                         'similarity': similarity,
                         'weighted_similarity': weighted_similarity,
                         'is_bot': is_bot,
@@ -304,25 +424,35 @@ class ContextManager:
                 # use the newest messages (but still token-limited)
                 if total_docs > 0:
                     logger.info("Fallback: Using newest messages for context")
-                    fallback_results = self.chroma_collection.get(
-                        where={"chat_id": str(chat_info['id'])},
-                        limit=Config.CONTEXT_SEARCH_RESULTS
+                    fallback_response = self.qdrant_client.scroll(
+                        collection_name=Config.QDRANT_COLLECTION_NAME,
+                        scroll_filter=Filter(
+                            must=[
+                                FieldCondition(
+                                    key="chat_id",
+                                    match=MatchValue(value=str(chat_info['id']))
+                                )
+                            ]
+                        ),
+                        limit=Config.CONTEXT_SEARCH_RESULTS,
+                        with_payload=True,
+                        with_vectors=False
                     )
                     
-                    if fallback_results['documents']:
+                    if fallback_response[0]:
                         # Convert to same format
-                        for i, doc in enumerate(fallback_results['documents']):
-                            metadata = fallback_results['metadatas'][i]
-                            is_bot = metadata.get('is_bot', 'False') == 'True'
+                        for point in fallback_response[0]:
+                            payload = point.payload
+                            is_bot = payload.get('is_bot', 'False') == 'True'
                             
                             relevant_messages.append({
-                                'timestamp': metadata['timestamp'],
-                                'user_name': metadata['user_name'],
-                                'text': doc,
+                                'timestamp': payload['timestamp'],
+                                'user_name': payload['user_name'],
+                                'text': payload['text'],
                                 'similarity': 0.5,  # Neutral similarity for fallback
                                 'weighted_similarity': 0.5,
                                 'is_bot': is_bot,
-                                'message_type': metadata.get('message_type', 'user_message')
+                                'message_type': payload.get('message_type', 'user_message')
                             })
                             
                             if is_bot:
@@ -399,39 +529,53 @@ class ContextManager:
         logger.info(f"Context selection: {len(selected)} messages ({user_selected} User + {bot_selected} Bot), ~{current_tokens:.0f} tokens")
         return selected
     
-    def search_context_chromadb(self, query_text, chat_id=None, limit=10):
-        """Searches ChromaDB for similar contexts"""
-        if not self.chroma_collection:
+    def search_context_qdrant(self, query_text, chat_id=None, limit=10):
+        """Searches Qdrant for similar contexts"""
+        if not self.qdrant_client or not self.collection_exists:
             return []
             
         try:
-            where_filter = {}
-            if chat_id:
-                where_filter["chat_id"] = str(chat_id)
+            # Generate embedding for the query
+            query_vector = self._get_embedding(query_text)
             
-            results = self.chroma_collection.query(
-                query_texts=[query_text],
-                where=where_filter if where_filter else None,
-                n_results=limit
+            # Build filter
+            query_filter = None
+            if chat_id:
+                query_filter = Filter(
+                    must=[
+                        FieldCondition(
+                            key="chat_id",
+                            match=MatchValue(value=str(chat_id))
+                        )
+                    ]
+                )
+            
+            # Perform search
+            search_results = self.qdrant_client.search(
+                collection_name=Config.QDRANT_COLLECTION_NAME,
+                query_vector=query_vector,
+                query_filter=query_filter,
+                limit=limit,
+                with_payload=True,
+                with_vectors=False
             )
             
-            if not results['documents'] or not results['documents'][0]:
+            if not search_results:
                 return []
             
             # Format results
-            search_results = []
-            for i, doc in enumerate(results['documents'][0]):
-                metadata = results['metadatas'][0][i]
-                search_results.append({
-                    'text': doc,
-                    'metadata': metadata,
-                    'distance': results['distances'][0][i] if results['distances'] else None
+            formatted_results = []
+            for result in search_results:
+                formatted_results.append({
+                    'text': result.payload['text'],
+                    'metadata': result.payload,
+                    'score': result.score  # Qdrant returns similarity score, not distance
                 })
             
-            return search_results
+            return formatted_results
             
         except Exception as e:
-            logger.error(f"Error in ChromaDB search: {e}")
+            logger.error(f"Error in Qdrant search: {e}")
             return []
     
     def _extract_chat_info(self, message):
@@ -482,9 +626,9 @@ class ContextManager:
             'total_chats': len(context_files),
             'total_lines': 0,
             'total_size_mb': 0,
-            'chromadb_enabled': self.chroma_collection is not None,
-            'chromadb_documents': 0,
-            'chromadb_chats': 0
+            'qdrant_enabled': self.qdrant_client is not None and self.collection_exists,
+            'qdrant_documents': 0,
+            'qdrant_chats': 0
         }
         
         # Collect file statistics
@@ -501,44 +645,50 @@ class ContextManager:
             except Exception as e:
                 logger.warning(f"Error reading file {file}: {e}")
         
-        # Collect ChromaDB statistics
-        if self.chroma_collection:
+        # Collect Qdrant statistics
+        if self.qdrant_client and self.collection_exists:
             try:
                 # Total number of documents
-                collection_count = self.chroma_collection.count()
-                stats['chromadb_documents'] = collection_count
+                collection_info = self.qdrant_client.get_collection(Config.QDRANT_COLLECTION_NAME)
+                stats['qdrant_documents'] = collection_info.points_count
                 
                 # Number of unique chats
-                if collection_count > 0:
-                    all_metadata = self.chroma_collection.get()['metadatas']
+                if collection_info.points_count > 0:
+                    # Use scroll to get all points (with limit for safety)
+                    all_response = self.qdrant_client.scroll(
+                        collection_name=Config.QDRANT_COLLECTION_NAME,
+                        limit=10000,  # Reasonable limit
+                        with_payload=['chat_id'],
+                        with_vectors=False
+                    )
                     unique_chats = set()
-                    for meta in all_metadata:
-                        unique_chats.add(meta.get('chat_id', 'unknown'))
-                    stats['chromadb_chats'] = len(unique_chats)
+                    for point in all_response[0]:
+                        unique_chats.add(point.payload.get('chat_id', 'unknown'))
+                    stats['qdrant_chats'] = len(unique_chats)
                     
             except Exception as e:
-                logger.warning(f"Error retrieving ChromaDB statistics: {e}")
+                logger.warning(f"Error retrieving Qdrant statistics: {e}")
         
         return stats
     
-    def is_chromadb_available(self):
-        """Checks if ChromaDB is available and connected"""
-        return self.chroma_collection is not None
+    def is_qdrant_available(self):
+        """Checks if Qdrant is available and connected"""
+        return self.qdrant_client is not None and self.collection_exists
     
-    def reset_chromadb_connection(self):
-        """Resets the ChromaDB connection and attempts to reconnect"""
-        logger.info("🔄 ChromaDB connection is being reset...")
-        self.chroma_client = None
-        self.chroma_collection = None
-        self._init_chromadb()
-        if self.is_chromadb_available():
-            logger.info("✅ ChromaDB reconnection successful")
+    def reset_qdrant_connection(self):
+        """Resets the Qdrant connection and attempts to reconnect"""
+        logger.info("🔄 Qdrant connection is being reset...")
+        self.qdrant_client = None
+        self.collection_exists = False
+        self._init_qdrant()
+        if self.is_qdrant_available():
+            logger.info("✅ Qdrant reconnection successful")
         else:
-            logger.warning("❌ ChromaDB reconnection failed")
+            logger.warning("❌ Qdrant reconnection failed")
         
-    def get_chat_history_chromadb(self, chat_id, days=7):
-        """Gets chat history from ChromaDB for recent days"""
-        if not self.chroma_collection:
+    def get_chat_history_qdrant(self, chat_id, days=7):
+        """Gets chat history from Qdrant for recent days"""
+        if not self.qdrant_client or not self.collection_exists:
             return []
             
         try:
@@ -546,28 +696,39 @@ class ContextManager:
             from datetime import datetime, timedelta
             cutoff_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
             
-            results = self.chroma_collection.get(
-                where={
-                    "$and": [
-                        {"chat_id": str(chat_id)},
-                        {"date": {"$gte": cutoff_date}}
+            # For now, get all messages for this chat and filter in Python
+            # Qdrant's Range filter works with numeric values, not string dates
+            response = self.qdrant_client.scroll(
+                collection_name=Config.QDRANT_COLLECTION_NAME,
+                scroll_filter=Filter(
+                    must=[
+                        FieldCondition(
+                            key="chat_id",
+                            match=MatchValue(value=str(chat_id))
+                        )
                     ]
-                }
+                ),
+                with_payload=True,
+                with_vectors=False
             )
             
-            if not results['documents']:
+            if not response[0]:
                 return []
             
-            # Sort by timestamp
+            # Filter by date and sort by timestamp
             messages = []
-            for i, doc in enumerate(results['documents']):
-                metadata = results['metadatas'][i]
-                messages.append({
-                    'timestamp': metadata['timestamp'],
-                    'user_name': metadata['user_name'],
-                    'text': doc,
-                    'metadata': metadata
-                })
+            for point in response[0]:
+                payload = point.payload
+                message_date = payload.get('date', '')
+                
+                # Filter messages by date (string comparison works for YYYY-MM-DD format)
+                if message_date >= cutoff_date:
+                    messages.append({
+                        'timestamp': payload['timestamp'],
+                        'user_name': payload['user_name'],
+                        'text': payload['text'],
+                        'metadata': payload
+                    })
             
             messages.sort(key=lambda x: x['timestamp'])
             return messages
@@ -575,3 +736,28 @@ class ContextManager:
         except Exception as e:
             logger.error(f"Error retrieving chat history: {e}")
             return []
+
+    # Backward compatibility methods (aliases for the old ChromaDB methods)
+    def load_chat_context_chromadb(self, message, limit=None):
+        """Backward compatibility - delegates to Qdrant"""
+        return self.load_chat_context_qdrant(message, limit)
+    
+    def load_relevant_context_chromadb(self, message, question):
+        """Backward compatibility - delegates to Qdrant"""
+        return self.load_relevant_context_qdrant(message, question)
+    
+    def search_context_chromadb(self, query_text, chat_id=None, limit=10):
+        """Backward compatibility - delegates to Qdrant"""
+        return self.search_context_qdrant(query_text, chat_id, limit)
+    
+    def get_chat_history_chromadb(self, chat_id, days=7):
+        """Backward compatibility - delegates to Qdrant"""
+        return self.get_chat_history_qdrant(chat_id, days)
+    
+    def is_chromadb_available(self):
+        """Backward compatibility - delegates to Qdrant"""
+        return self.is_qdrant_available()
+    
+    def reset_chromadb_connection(self):
+        """Backward compatibility - delegates to Qdrant"""
+        return self.reset_qdrant_connection()

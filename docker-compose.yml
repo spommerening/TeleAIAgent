@@ -12,7 +12,7 @@ services:
       - .env
     volumes:
       - ./volumes/teleaiagent/audio:/app/audio
-      - ./volumes/teleaiagent/cache:/root/.cache  # Persist ONNX model cache
+      - ./volumes/teleaiagent/cache:/root/.cache  # Persist model cache (CPU-optimized)
       - ./volumes/teleaiagent/context:/app/context
       - ./volumes/teleaiagent/documents:/app/documents
       - ./volumes/teleaiagent/images:/app/images
@@ -22,6 +22,13 @@ services:
     networks:
       - mynetwork
     restart: unless-stopped
+    # Resource limits for CPU-only operation
+    deploy:
+      resources:
+        limits:
+          memory: 2G  # Sufficient for SentenceTransformers on CPU
+        reservations:
+          memory: 512M
     logging:
       driver: "json-file"
       options:
@@ -37,19 +44,18 @@ services:
       - mynetwork
     restart: unless-stopped
 
-  chromadb:
-    image: chromadb/chroma:0.6.3
-    container_name: chromadb
+  qdrant:
+    image: qdrant/qdrant:v1.11.0
+    container_name: qdrant
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "6333:6333"  # REST API
+      - "6334:6334"  # gRPC API (optional)
     volumes:
-      - ./volumes/chromadb/chroma:/chroma/chroma
+      - ./volumes/qdrant/storage:/qdrant/storage
     environment:
-      - IS_PERSISTENT=TRUE
-      - PERSIST_DIRECTORY=/chroma/chroma
-      - ANONYMIZED_TELEMETRY=FALSE
-      - CHROMA_SERVER_NOFILE=65535
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__SERVICE__GRPC_PORT=6334
     env_file:
       - .env
     networks:
