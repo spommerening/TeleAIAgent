@@ -17,7 +17,9 @@ class Config:
     OLLAMA_URL = "http://ollama:11434"
     OLLAMA_API_URL = "http://ollama:11434/api/chat"
     # OLLAMA_MODEL = "gemma3n:e2b"  # Same as teleaiagent
-    OLLAMA_MODEL = "llava:7b"  # Better vision model
+    # OLLAMA_MODEL = "llava:7b"  # Better vision model
+    OLLAMA_MODEL = "llava-llama3:8b-v1.1-q4_0"  # Better vision model with Llama 3
+    # OLLAMA_MODEL = "llava-llama3:13b-v1.1-q4_0"  # Uncomment for better results, requires more RAM
     OLLAMA_TEMPERATURE = 0.7
     
     # Qdrant configuration (inherited from teleaiagent)
