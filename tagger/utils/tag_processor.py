@@ -215,12 +215,12 @@ class TagProcessor:
     
     def _calculate_quality_score(self, final_tags: List[str], original_tags: List[str]) -> float:
         """Calculate a quality score for the tag processing"""
-        if not original_tags:
+        if not original_tags or not final_tags:
             return 0.0
             
         # Factors for quality scoring
         diversity_score = len(set(final_tags)) / max(len(final_tags), 1)  # Uniqueness
-        length_score = sum(1 for tag in final_tags if len(tag) > 4) / len(final_tags)  # Descriptiveness
+        length_score = sum(1 for tag in final_tags if len(tag) > 4) / max(len(final_tags), 1)  # Descriptiveness
         retention_score = len(final_tags) / len(original_tags)  # How many we kept
         
         # Combined score (0-1)
