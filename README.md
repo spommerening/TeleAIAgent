@@ -226,10 +226,11 @@ TeleAIAgent is an extensible, AI-powered Telegram bot with **concurrent processi
 
 ### Prerequisites (AsyncIO Optimized)
 - Docker Engine 20.10+
-- Docker Compose Plugin
+- **Modern Docker Compose Plugin** (uses `docker compose` not `docker-compose`)
 - Git
 - 4GB+ RAM recommended (handles concurrent processing efficiently)
 - CPU with multiple cores (better for async operations)
+- **Python 3.11+ with venv** (for local development and testing)
 
 ### 1. Clone Repository
 ```bash
@@ -237,8 +238,16 @@ git clone https://github.com/spommerening/TeleAIAgent.git
 cd TeleAIAgent
 ```
 
-### 2. Configure Environment Variables
+### 2. Setup Development Environment
 ```bash
+# Create Python virtual environment for local development
+python3 -m venv ./venv
+source ./venv/bin/activate
+
+# Install development dependencies (for running tests)
+pip install -r teleaiagent/requirements.txt
+pip install -r tagger/requirements.txt
+
 # Create/edit .env file
 cp .env.example .env
 nano .env
@@ -248,6 +257,8 @@ TG_BOT_TOKEN="your_telegram_bot_token"
 PERPLEXITY_API_KEY="your_perplexity_api_key"
 AI_BACKEND="perplexity"  # or "ollama"
 ```
+
+> 📋 **Important**: Always activate the virtual environment with `source ./venv/bin/activate` before running Python scripts from the host system. The `./venv` directory is not committed to the repository.
 
 ### 3. Start AsyncIO Services + Tagger Microservice
 ```bash
@@ -263,6 +274,11 @@ docker compose up
 
 # Check tagger service health:
 curl http://localhost:7777/health
+
+# ⚠️ IMPORTANT: CPU Performance Notes
+# First AI operations (Ollama model downloads, image tagging) can take 5-15+ minutes
+# Be patient during initial startup - subsequent operations will be faster
+# Use extended timeouts (600s+) for production deployments
 ```
 
 ## 🐳 AsyncIO Docker Management
@@ -449,30 +465,28 @@ curl -X POST \
 
 ## 🔧 AsyncIO Development & Extension
 
-### Local Development (AsyncIO + Tagger Environment)
+### Local Development Environment
 ```bash
-# Set up AsyncIO Python environment for TeleAIAgent
-cd teleaiagent/
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# or venv\Scripts\activate  # Windows
-pip install -r requirements.txt  # Includes aiogram 3.x, aiohttp, aiofiles
+# ⚠️ ALWAYS activate the shared virtual environment first
+source ./venv/bin/activate  # Required for all Python operations from host
 
-# Run AsyncIO bot locally (requires .env configuration)
+# Run AsyncIO bot locally (from host, requires Docker services running)
+cd teleaiagent/
 python main.py  # Starts AsyncIO event loop with concurrent processing
 
-# Set up Tagger microservice environment (separate terminal)
-cd tagger/
-python -m venv tagger_venv
-source tagger_venv/bin/activate
-pip install -r requirements.txt  # Includes FastAPI, vision dependencies
-
-# Run tagger service locally
+# Run tagger service locally (alternative to Docker)
+cd ../tagger/
 python main.py  # Starts FastAPI service on port 7777
+
+# Note: Local development still requires Qdrant and Ollama containers
+docker compose up qdrant ollama -d
 ```
 
 ### Testing AsyncIO + Tagger Integration
 ```bash
+# ⚠️ CRITICAL: Always activate venv before running Python tests
+source ./venv/bin/activate
+
 # Test Qdrant connectivity and semantic search (async)
 cd teleaiagent/
 python test_qdrant.py
@@ -480,8 +494,8 @@ python test_qdrant.py
 # Test concurrent processing
 python test_async.py  # Validates AsyncIO performance and concurrent operations
 
-# Test tagger microservice integration
-cd ../  # Root directory
+# Test tagger microservice integration (from root directory)
+cd ../
 python test_tagger_integration.py  # End-to-end image processing test
 
 # Test individual tagger components
@@ -730,6 +744,39 @@ This project has been **successfully upgraded** with major architectural improve
 - **Resource Efficient**: CPU-only setup reduces hardware requirements
 - **Production Ready**: Scalable microservice architecture
 - **Modern Stack**: Latest AsyncIO patterns with concurrent processing
+
+## ⚡ **Performance Considerations & CPU-Only Operation**
+
+### 🖥️ **CPU-Only Architecture Benefits**
+- **No GPU Required**: Runs on standard CPU-only hardware
+- **Cost Effective**: Reduced infrastructure requirements
+- **Wide Compatibility**: Works on any modern multi-core CPU system
+
+### ⏱️ **Performance Expectations (CPU-Only)**
+- **First Startup**: 5-15+ minutes for initial model downloads and setup
+- **Image Tagging**: 2-5 minutes per image (Ollama vision models on CPU)
+- **Text Processing**: Near real-time with SentenceTransformers
+- **Vector Search**: Sub-second response times after embedding generation
+- **Subsequent Operations**: Faster due to model caching
+
+### 🛠️ **Optimization Strategies**
+- **Extended Timeouts**: Configure 600+ second timeouts for AI operations
+- **Model Caching**: First model downloads are cached for future use  
+- **Concurrent Processing**: AsyncIO handles multiple requests efficiently
+- **Resource Limits**: 2GB RAM for bot, 3GB for tagger service
+- **Background Processing**: Long operations don't block user interactions
+
+> 📋 **Development Tips**: 
+> - Use `source ./venv/bin/activate` before running Python scripts
+> - Test with `docker compose` (modern syntax) not `docker-compose`
+> - Be patient during first AI operations - they get faster!
+> - Monitor logs with `docker compose logs -f [service]`
+
+> 📖 **Detailed Guides**: 
+> - [AsyncIO Implementation](doc/ASYNCIO_README.md)
+> - [Qdrant Integration](doc/QDRANT_INTEGRATION.md) 
+> - [CPU Installation](doc/CPU_INSTALLATION.md)
+> - [Ollama Backend Setup](doc/OLLAMA_BACKEND_SETUP.md)
 
 ### 🚀 **Current Status: Production Ready with AI Image Processing**
 All services operational (4-container architecture), tests passing, and ready for deployment with comprehensive AI-powered image management! 
