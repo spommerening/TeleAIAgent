@@ -790,5 +790,3 @@ All services operational (4-container architecture), tests passing, and ready fo
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
-
-MIT License - see [LICENSE](LICENSE) file for details.
