@@ -23,8 +23,8 @@ class OllamaClient:
         self.base_url = Config.OLLAMA_URL
         self.api_url = f"{self.base_url}/api/generate"
         self.chat_url = f"{self.base_url}/api/chat"
-        self.primary_model = getattr(Config, 'PRIMARY_VISION_MODEL', 'llava:7b')
-        self.fallback_model = getattr(Config, 'FALLBACK_VISION_MODEL', Config.OLLAMA_MODEL)
+        self.primary_model = getattr(Config, 'PRIMARY_VISION_MODEL', Config.OLLAMA_MODEL)
+        self.fallback_model = getattr(Config, 'FALLBACK_VISION_MODEL', 'llava:7b')
         self.active_model = None
         self.session: Optional[aiohttp.ClientSession] = None
         self.initialized = False
@@ -103,23 +103,23 @@ class OllamaClient:
             self.active_model = self.fallback_model
             logger.info(f"🔄 Defaulting to fallback model: {self.active_model}")
             
-    async def analyze_image(self, image_data: bytes, prompt: Optional[str] = None) -> List[str]:
+    async def analyze_image(self, image_data: bytes, prompt: Optional[str] = None) -> str:
         """
-        Analyze image and generate tags using Ollama
+        Analyze image and generate a comprehensive description using Ollama
         
         Args:
             image_data: Raw image bytes
             prompt: Optional custom prompt (uses default if not provided)
             
         Returns:
-            List of generated tags
+            String with comprehensive image description
         """
         if not self.initialized or not self.session:
             raise Exception("Ollama client not initialized")
             
-        # Use default prompt if none provided
+        # Use default German description prompt if none provided
         if prompt is None:
-            prompt = Config.IMAGE_TAGGING_PROMPT
+            prompt = "Beschreibe dieses Bild detailliert auf Deutsch, einschließlich Objekten, Personen, Umgebung, Farben, Stimmung und bemerkenswerten Eigenschaften. Gib eine umfassende Beschreibung in 2-3 Sätzen."
             
         logger.info(f"🔍 Analyzing image with Ollama, model={self.active_model}, prompt_length={len(prompt)}")
         
@@ -134,10 +134,10 @@ class OllamaClient:
                 "images": [image_b64],
                 "stream": False,
                 "options": {
-                    "temperature": Config.OLLAMA_TEMPERATURE,
-                    "num_predict": 200,  # Increased for more detailed tags
-                    "top_p": 0.9,       # Slightly more focused responses
-                    "repeat_penalty": 1.1  # Reduce repetition
+                    "temperature": 0.7,     # Balanced creativity for descriptions
+                    "num_predict": 300,     # Allow longer descriptions
+                    "top_p": 0.9,          # Slightly more focused responses
+                    "repeat_penalty": 1.1   # Reduce repetition
                 }
             }
             
@@ -145,15 +145,12 @@ class OllamaClient:
             async with self.session.post(self.api_url, json=request_data) as response:
                 if response.status == 200:
                     result = await response.json()
-                    response_text = result.get('response', '').strip()
+                    description = result.get('response', '').strip()
                     
-                    logger.info(f"✅ Image analysis completed, response_length={len(response_text)}")
+                    logger.info(f"✅ Image analysis completed, description_length={len(description)}")
+                    logger.info(f"📝 Generated description: {description[:100]}...")
                     
-                    # Parse tags from response
-                    tags = self._parse_tags(response_text)
-                    
-                    logger.info(f"🏷️ Generated tags, tags={tags}, count={len(tags)}")
-                    return tags
+                    return description
                     
                 else:
                     error_text = await response.text()
@@ -163,106 +160,50 @@ class OllamaClient:
             logger.error(f"❌ Image analysis failed: {str(e)}")
             raise
     
-    async def analyze_image_multi_pass(self, image_data: bytes) -> Dict:
+    async def generate_image_description(self, image_data: bytes) -> Dict:
         """
-        Perform multi-pass image analysis with different prompts
+        Generate a comprehensive image description using a single optimized prompt
         
         Args:
             image_data: Raw image bytes
             
         Returns:
-            Dict with results from different analysis passes
+            Dict with description and metadata
         """
         if not self.initialized or not self.session:
             raise Exception("Ollama client not initialized")
             
-        logger.info(f"🔍 Starting multi-pass image analysis with model: {self.active_model}")
+        logger.info(f"🔍 Generating comprehensive image description with model: {self.active_model}")
+        
+        # Single comprehensive prompt for detailed German description
+        comprehensive_prompt = """Analysiere dieses Bild und gib eine detaillierte Beschreibung auf Deutsch, die folgende Aspekte umfasst:
+- Welche Objekte, Personen oder Motive sind sichtbar
+- Die Umgebung, der Ort oder die Atmosphäre
+- Farben, Beleuchtung und visueller Stil
+- Stimmung, Atmosphäre oder emotionaler Ton
+- Bemerkenswerte Aktivitäten oder Interaktionen
+- Technische Aspekte wie Komposition oder Perspektive
+
+Gib eine umfassende, natürliche Beschreibung in 2-4 Sätzen auf Deutsch, die das Wesen des Bildes einfängt."""
         
         try:
-            # Primary detailed analysis
-            primary_tags = await self.analyze_image(image_data, Config.IMAGE_TAGGING_PROMPT)
-            
-            # Artistic analysis
-            artistic_tags = await self.analyze_image(image_data, Config.ARTISTIC_ANALYSIS_PROMPT)
-            
-            # Contextual analysis  
-            contextual_tags = await self.analyze_image(image_data, Config.CONTEXTUAL_ANALYSIS_PROMPT)
+            description = await self.analyze_image(image_data, comprehensive_prompt)
             
             result = {
-                'primary_tags': primary_tags,
-                'artistic_tags': artistic_tags,
-                'contextual_tags': contextual_tags,
+                'description': description,
                 'model_used': self.active_model,
-                'total_passes': 3
+                'analysis_type': 'comprehensive_description'
             }
             
-            logger.info(f"✅ Multi-pass analysis completed: {len(primary_tags)} + {len(artistic_tags)} + {len(contextual_tags)} tags")
+            logger.info(f"✅ Image description completed: {description[:100]}...")
             
             return result
             
         except Exception as e:
-            logger.error(f"❌ Multi-pass image analysis failed: {str(e)}")
-            # Fallback to single pass
-            logger.info("🔄 Falling back to single-pass analysis")
-            primary_tags = await self.analyze_image(image_data, Config.IMAGE_TAGGING_PROMPT)
-            return {
-                'primary_tags': primary_tags,
-                'artistic_tags': [],
-                'contextual_tags': [],
-                'model_used': self.active_model,
-                'total_passes': 1,
-                'fallback_mode': True
-            }
+            logger.error(f"❌ Image description generation failed: {str(e)}")
+            raise
             
-    def _parse_tags(self, response_text: str) -> List[str]:
-        """
-        Parse tags from Ollama response text
-        
-        Args:
-            response_text: Raw response from Ollama
-            
-        Returns:
-            List of parsed tags
-        """
-        # Clean and split response into tags
-        tags = []
-        
-        # Remove common prefixes/suffixes
-        text = response_text.lower().strip()
-        
-        # Remove common response patterns
-        patterns_to_remove = [
-            "tags:", "the tags are:", "i can see:", "the image shows:",
-            "tags for this image:", "description:", "here are the tags:"
-        ]
-        
-        for pattern in patterns_to_remove:
-            if text.startswith(pattern):
-                text = text[len(pattern):].strip()
-                break
-        
-        # Split by common separators
-        if ',' in text:
-            # Comma-separated
-            raw_tags = text.split(',')
-        elif ';' in text:
-            # Semicolon-separated
-            raw_tags = text.split(';')
-        elif '\n' in text:
-            # Line-separated
-            raw_tags = text.split('\n')
-        else:
-            # Space-separated (fallback)
-            raw_tags = text.split()
-            
-        # Clean each tag
-        for tag in raw_tags:
-            cleaned_tag = tag.strip().strip('.,;:"\'()[]{}')
-            if cleaned_tag and len(cleaned_tag) > 1:
-                tags.append(cleaned_tag)
-                
-        # Limit number of tags
-        return tags[:10]  # Max 10 tags
+
         
     async def health_check(self) -> bool:
         """Check if Ollama service is healthy"""

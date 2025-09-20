@@ -175,7 +175,7 @@ async def tag_image(
         # Process image with handler
         result = await image_handler.process_image(image_data, telegram_metadata)
         
-        logger.info(f"✅ Image processing completed successfully - tags: {result.get('tags', [])}, file_path: {result.get('file_path')}")
+        logger.info(f"✅ Image processing completed successfully - description: {result.get('description', '')[:50]}..., storage_path: {result.get('storage_path')}")
         
         return JSONResponse(content={
             "status": "success",
@@ -217,6 +217,34 @@ async def get_stats():
     except Exception as e:
         logger.error(f"Failed to get stats: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
+
+
+@app.get("/search-similar")
+async def search_similar_images(
+    query: str,
+    limit: int = 10
+):
+    """
+    Search for images with similar descriptions
+    
+    Args:
+        query: Text query to search for
+        limit: Maximum number of results to return
+        
+    Returns:
+        List of similar images with metadata and similarity scores
+    """
+    try:
+        logger.info(f"🔍 Searching for similar images: '{query}' (limit={limit})")
+        
+        results = await image_handler.search_similar_images(query, limit)
+        
+        logger.info(f"✅ Search completed: {len(results)} results found")
+        return results
+        
+    except Exception as e:
+        logger.error(f"❌ Search failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 
 def main():

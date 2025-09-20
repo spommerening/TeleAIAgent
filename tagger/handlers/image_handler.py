@@ -1,6 +1,6 @@
 """
 Image Handler for Tagger Service
-Coordinates image processing workflow: analysis, tagging, storage, and Qdrant indexing
+Coordinates image processing workflow: analysis, description generation, storage, and Qdrant indexing
 """
 
 import json
@@ -13,28 +13,28 @@ from fastapi import HTTPException
 from utils.ollama_client import OllamaClient
 from utils.file_manager import FileManager
 from utils.qdrant_client import QdrantManager
-from utils.tag_processor import TagProcessor
+from utils.description_processor import DescriptionProcessor
 
 logger = logging.getLogger(__name__)
 
 
 class ImageHandler:
-    """Handles complete image processing workflow"""
+    """Handles complete image processing workflow with description generation"""
     
     def __init__(self, ollama_client: OllamaClient, file_manager: FileManager, qdrant_manager: QdrantManager):
         """Initialize image handler with required clients"""
         self.ollama_client = ollama_client
         self.file_manager = file_manager
         self.qdrant_manager = qdrant_manager
-        self.tag_processor = TagProcessor()
-        logger.info("🎯 Enhanced Image Handler initialized with advanced tag processing")
+        self.description_processor = DescriptionProcessor()
+        logger.info("🎯 Image Handler initialized for description generation")
     
     async def process_image(self, 
                           image_data: bytes, 
                           telegram_metadata: str,
                           filename: str = None) -> Dict:
         """
-        Process an image through the complete workflow
+        Process an image through the simplified workflow with description generation
         
         Args:
             image_data: Raw image bytes
@@ -42,7 +42,7 @@ class ImageHandler:
             filename: Optional original filename
             
         Returns:
-            Dict with processing results including document_id and storage_path
+            Dict with processing results including document_id, storage_path, and description
         """
         try:
             # Parse telegram metadata
@@ -52,30 +52,27 @@ class ImageHandler:
                 logger.error(f"❌ Invalid JSON in telegram_metadata: {str(e)}")
                 raise HTTPException(status_code=400, detail="Invalid telegram_metadata JSON")
             
-            logger.info(f"🚀 Starting complete image processing workflow, chat_id={metadata.get('chat_id')}, user_name={metadata.get('user_name')}, message_id={metadata.get('message_id')}")
+            logger.info(f"🚀 Starting image description workflow, chat_id={metadata.get('chat_id')}, user_name={metadata.get('user_name')}, message_id={metadata.get('message_id')}")
             
-            # Step 1: Enhanced multi-pass image analysis
-            logger.info("🤖 Step 1: Enhanced multi-pass image analysis with Ollama...")
+            # Step 1: Generate comprehensive image description
+            logger.info("🤖 Step 1: Generating image description with Ollama...")
             
-            # Perform multi-pass analysis for better tag quality
-            analysis_results = await self.ollama_client.analyze_image_multi_pass(image_data)
+            # Generate single comprehensive description
+            description_result = await self.ollama_client.generate_image_description(image_data)
+            raw_description = description_result['description']
             
-            # Process and enhance tags with quality filtering
-            tag_processing_result = self.tag_processor.merge_multi_pass_tags(
-                primary_result=self.tag_processor.process_tags(analysis_results['primary_tags']),
-                artistic_tags=analysis_results.get('artistic_tags', []),
-                contextual_tags=analysis_results.get('contextual_tags', [])
-            )
+            # Process and validate description
+            processed_description = self.description_processor.process_description(raw_description)
             
-            tags = tag_processing_result['tags']
-            tag_metadata = {
-                'quality_score': tag_processing_result['quality_score'],
-                'categorized_tags': tag_processing_result.get('categorized_tags', {}),
-                'multi_pass_info': tag_processing_result.get('sources', {}),
-                'model_used': analysis_results.get('model_used', 'unknown')
-            }
+            if not processed_description['is_valid']:
+                logger.warning("⚠️ Generated description failed validation, using raw description")
+                final_description = raw_description
+                quality_score = 0.5
+            else:
+                final_description = processed_description['description']
+                quality_score = processed_description['processing_stats']['quality_score']
             
-            logger.info(f"✅ Enhanced analysis completed: {len(tags)} high-quality tags (quality: {tag_processing_result['quality_score']})")
+            logger.info(f"✅ Description generated: {final_description[:100]}... (quality: {quality_score})")
             
             # Step 2: Generate storage path with year/month/day structure
             logger.info("📁 Step 2: Generating storage path...")
@@ -89,44 +86,47 @@ class ImageHandler:
                 file_path=storage_path  # storage_path is already the full path including filename
             )
             
-            # Step 4: Create comprehensive metadata with enhanced tagging information
+            # Step 4: Create comprehensive metadata with description information
             enhanced_metadata = {
                 **metadata,
-                'tags': tags,
+                'description': final_description,
                 'image_path': stored_path,
                 'storage_path': storage_path,
                 'processed_at': time.strftime('%Y-%m-%d %H:%M:%S'),
-                'tag_count': len(tags),
-                'tagging_metadata': tag_metadata,
-                'enhanced_tagging': True
+                'description_length': len(final_description),
+                'description_metadata': {
+                    'quality_score': quality_score,
+                    'model_used': description_result.get('model_used', 'unknown'),
+                    'analysis_type': description_result.get('analysis_type', 'description'),
+                    'is_valid': processed_description.get('is_valid', False)
+                }
             }
             
             # Step 5: Store in Qdrant for semantic search
-            logger.info("🗄️ Step 5: Storing tags in Qdrant...")
-            doc_id = await self.qdrant_manager.store_image_tags(
-                tags=tags,
+            logger.info("🗄️ Step 5: Storing description in Qdrant...")
+            doc_id = await self.qdrant_manager.store_image_description(
+                description=final_description,
                 image_path=stored_path,
                 metadata=enhanced_metadata
             )
-            logger.info(f"✅ Tags stored in Qdrant, document_id={doc_id}")
+            logger.info(f"✅ Description stored in Qdrant, document_id={doc_id}")
             
-            # Return comprehensive result with enhanced tagging information
+            # Return comprehensive result with description information
             result = {
                 'success': True,
                 'document_id': doc_id,
                 'storage_path': stored_path,
-                'tags': tags,
-                'tag_count': len(tags),
+                'description': final_description,
+                'description_length': len(final_description),
                 'metadata': enhanced_metadata,
-                'tag_quality': tag_metadata['quality_score'],
-                'categorized_tags': tag_metadata['categorized_tags'],
+                'quality_score': quality_score,
                 'model_info': {
-                    'model_used': tag_metadata['model_used'],
-                    'multi_pass': tag_metadata.get('multi_pass_info', {})
+                    'model_used': description_result.get('model_used', 'unknown'),
+                    'analysis_type': description_result.get('analysis_type', 'description')
                 }
             }
             
-            logger.info("🎉 Complete image processing workflow finished successfully")
+            logger.info("🎉 Image description workflow finished successfully")
             return result
             
         except json.JSONDecodeError as e:
@@ -138,7 +138,7 @@ class ImageHandler:
     
     async def search_similar_images(self, query_text: str, limit: int = 10) -> List[Dict]:
         """
-        Search for images with similar content using semantic search
+        Search for images with similar descriptions using semantic search
         
         Args:
             query_text: Text query to search for
@@ -148,9 +148,9 @@ class ImageHandler:
             List of similar images with metadata and similarity scores
         """
         try:
-            logger.info(f"🔍 Searching for similar images: '{query_text}' (limit={limit})")
+            logger.info(f"🔍 Searching for similar images by description: '{query_text}' (limit={limit})")
             
-            results = await self.qdrant_manager.search_similar_images(
+            results = await self.qdrant_manager.search_similar_descriptions(
                 query_text=query_text,
                 limit=limit
             )
