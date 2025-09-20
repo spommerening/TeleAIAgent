@@ -29,6 +29,17 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# Configure HTTP libraries logging
+if not Config.DEBUG_HTTP_LIBRARIES:
+    # Set HTTP libraries to higher level (less spam)
+    logging.getLogger('httpcore').setLevel(logging.WARNING)
+    logging.getLogger('urllib3').setLevel(logging.WARNING)
+    logging.getLogger('httpx').setLevel(logging.WARNING)
+    logging.getLogger('aiohttp').setLevel(logging.WARNING)
+    logger.info("HTTP debug logging disabled (Config.DEBUG_HTTP_LIBRARIES = False)")
+else:
+    logger.info("HTTP debug logging enabled (Config.DEBUG_HTTP_LIBRARIES = True)")
+
 # Global service managers
 ollama_client: Optional[OllamaClient] = None
 qdrant_manager: Optional[QdrantManager] = None

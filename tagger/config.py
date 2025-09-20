@@ -84,6 +84,7 @@ Erstelle 5-7 kontextuelle Tags in deutscher Sprache als kommagetrennte Liste.
     # Logging configuration
     LOGS_DIR = "/app/logs"
     LOG_LEVEL = "INFO"
+    DEBUG_HTTP_LIBRARIES = False  # Control httpx, aiohttp and other HTTP libraries logging (False = WARNING level)
     
     # Processing limits
     MAX_IMAGE_SIZE_MB = 10
