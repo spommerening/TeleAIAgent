@@ -13,8 +13,10 @@ pillow==10.0.1
 qdrant-client==1.11.0
 sentence-transformers==3.0.1
 
-# PyTorch CPU-only (matching teleaiagent)
-# Will be installed separately in Dockerfile for consistency
+# PyTorch CPU-only (architecture-specific)
+# x86_64: torch==2.4.0+cpu (from PyTorch wheel index)
+# ARM64:  torch==2.4.0 (from PyPI)
+# Will be installed separately in Dockerfile with architecture detection
 
 # HTTP Client for Ollama
 httpx==0.25.2
