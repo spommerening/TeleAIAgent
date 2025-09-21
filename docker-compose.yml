@@ -98,7 +98,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 12G                 # 16GB system: generous memory limit
+          memory: 14G                 # 16GB system: generous memory limit
           cpus: '4.0'                 # Use all available cores
         reservations:
           memory: 6G                  # 16GB system: adequate reservation
