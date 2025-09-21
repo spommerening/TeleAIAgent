@@ -18,6 +18,12 @@ class Config:
     OLLAMA_API_URL = "http://ollama:11434/api/chat"
     OLLAMA_TEMPERATURE = 0.7
     
+    # Timeout configuration for CPU-only systems (30 minutes for inference)
+    OLLAMA_INFERENCE_TIMEOUT = 1800  # 30 minutes for CPU vision model inference
+    OLLAMA_DOWNLOAD_TIMEOUT = 1800   # 30 minutes for model downloads  
+    OLLAMA_HEALTH_TIMEOUT = 10       # 10 seconds for health checks
+    OLLAMA_HEALTH_INTERVAL = 60      # Health check every 60 seconds during inference
+    
     # Qdrant configuration (inherited from teleaiagent)
     QDRANT_HOST = "qdrant"
     QDRANT_PORT = 6333

@@ -38,9 +38,13 @@ class OllamaClient:
         """Initialize the Ollama client and ensure model is available"""
         logger.info(f"🔧 Initializing Ollama client with model chain: {self.primary_model} → {self.fallback_model} → {self.emergency_fallback}, url={self.base_url}")
         
-        # Create HTTP session
-        timeout = aiohttp.ClientTimeout(total=300)  # 5 minutes for model downloads
-        self.session = aiohttp.ClientSession(timeout=timeout)
+        # Create HTTP session with different timeouts for different operations
+        # Model downloads and inference can take very long on CPU-only systems
+        self.download_timeout = aiohttp.ClientTimeout(total=Config.OLLAMA_DOWNLOAD_TIMEOUT)
+        self.inference_timeout = aiohttp.ClientTimeout(total=Config.OLLAMA_INFERENCE_TIMEOUT)
+        self.health_timeout = aiohttp.ClientTimeout(total=Config.OLLAMA_HEALTH_TIMEOUT)
+        
+        self.session = aiohttp.ClientSession(timeout=self.download_timeout)
         
         try:
             # Check if Ollama service is available
@@ -107,7 +111,7 @@ class OllamaClient:
             
     async def analyze_image(self, image_data: bytes, prompt: Optional[str] = None) -> str:
         """
-        Analyze image and generate a comprehensive description using Ollama
+        Analyze image and generate a comprehensive description using Ollama with health checks
         
         Args:
             image_data: Raw image bytes
@@ -126,6 +130,10 @@ class OllamaClient:
         logger.info(f"🔍 Analyzing image with Ollama, model={self.active_model}, prompt_length={len(prompt)}")
         
         try:
+            # Pre-flight health check
+            if not await self.health_check():
+                raise Exception("Ollama service is not responding to health checks")
+            
             # Encode image to base64
             image_b64 = base64.b64encode(image_data).decode('utf-8')
             
@@ -143,8 +151,74 @@ class OllamaClient:
                 }
             }
             
-            # Send request to Ollama
-            async with self.session.post(self.api_url, json=request_data) as response:
+            # Send request with health monitoring
+            return await self._analyze_with_health_monitoring(request_data)
+                    
+        except Exception as e:
+            logger.error(f"❌ Image analysis failed: {str(e)}")
+            raise
+            
+    async def _analyze_with_health_monitoring(self, request_data: dict) -> str:
+        """
+        Execute analysis with periodic health checks during long-running inference
+        
+        Args:
+            request_data: Request payload for Ollama API
+            
+        Returns:
+            Analysis result
+        """
+        # Create a separate session for health checks during inference
+        health_session = aiohttp.ClientSession(timeout=self.health_timeout)
+        
+        # Start the inference request
+        inference_task = asyncio.create_task(self._execute_inference(request_data))
+        
+        # Monitor health at configured intervals
+        health_interval = Config.OLLAMA_HEALTH_INTERVAL
+        last_health_check = asyncio.get_event_loop().time()
+        
+        try:
+            while not inference_task.done():
+                current_time = asyncio.get_event_loop().time()
+                
+                # Check if it's time for a health check
+                if current_time - last_health_check >= health_interval:
+                    logger.info("🔍 Performing health check during inference...")
+                    
+                    try:
+                        async with health_session.get(f"{self.base_url}/api/version") as health_response:
+                            if health_response.status == 200:
+                                logger.info("✅ Ollama is still healthy during inference")
+                            else:
+                                logger.warning(f"⚠️ Ollama health check failed: {health_response.status}")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Health check failed during inference: {e}")
+                        
+                    last_health_check = current_time
+                
+                # Wait briefly before next check
+                try:
+                    await asyncio.wait_for(asyncio.shield(inference_task), timeout=5)
+                    break  # Task completed
+                except asyncio.TimeoutError:
+                    continue  # Keep monitoring
+                    
+            # Get the result
+            result = await inference_task
+            logger.info("✅ Image analysis completed successfully")
+            return result
+            
+        finally:
+            await health_session.close()
+            
+    async def _execute_inference(self, request_data: dict) -> str:
+        """Execute the actual inference request"""
+        # Use inference timeout for the actual request
+        inference_session = aiohttp.ClientSession(timeout=self.inference_timeout)
+        
+        try:
+            async with inference_session.post(self.api_url, json=request_data) as response:
                 if response.status == 200:
                     result = await response.json()
                     description = result.get('response', '').strip()
@@ -158,9 +232,8 @@ class OllamaClient:
                     error_text = await response.text()
                     raise Exception(f"Ollama API error: {response.status} - {error_text}")
                     
-        except Exception as e:
-            logger.error(f"❌ Image analysis failed: {str(e)}")
-            raise
+        finally:
+            await inference_session.close()
     
     async def generate_image_description(self, image_data: bytes) -> Dict:
         """

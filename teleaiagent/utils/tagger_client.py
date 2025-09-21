@@ -22,9 +22,9 @@ class TaggerClient:
         
     async def initialize(self):
         """Initialize the HTTP session"""
-        # Long timeout for AI image processing: up to 10 minutes total
+        # Long timeout for AI image processing: up to 30 minutes total (CPU-only inference)
         timeout = aiohttp.ClientTimeout(
-            total=660,  # 11 minutes total (10 min processing + 1 min buffer)
+            total=1860,  # 31 minutes total (30 min processing + 1 min buffer)
             connect=30,  # Connection timeout (keep short for quick failure detection)
             sock_read=None  # No socket read timeout for long-running AI operations
         )
@@ -39,7 +39,7 @@ class TaggerClient:
             connector=connector,
             headers={'User-Agent': 'TeleAI-Agent/1.0'}
         )
-        logger.info(f"🔧 Tagger client initialized, url={self.tagger_url} (timeout: 11 minutes for AI processing)")
+        logger.info(f"🔧 Tagger client initialized, url={self.tagger_url} (timeout: 31 minutes for CPU-only AI processing)")
         
     async def process_image(
         self,
@@ -102,15 +102,15 @@ class TaggerClient:
                             return None
                             
             except asyncio.TimeoutError:
-                logger.error(f"⏱️ Timeout error after 11 minutes on attempt {attempt + 1}/{max_retries + 1}")
+                logger.error(f"⏱️ Timeout error after 31 minutes on attempt {attempt + 1}/{max_retries + 1}")
                 if attempt < max_retries:
-                    wait_time = 120  # 2-minute wait after timeout for AI processing
-                    logger.warning(f"⏳ Retrying after timeout in {wait_time}s - AI processing may need more time")
+                    wait_time = 300  # 5-minute wait after timeout for CPU-only processing
+                    logger.warning(f"⏳ Retrying after timeout in {wait_time}s - CPU-only AI processing may need more time")
                     await asyncio.sleep(wait_time)
                     continue
                 else:
-                    logger.error(f"❌ All retry attempts failed due to timeout (AI processing took longer than 11 minutes)")
-                    return None
+                    logger.error(f"❌ All retry attempts failed due to timeout (CPU-only AI processing took longer than 31 minutes)")
+                    raise Exception("Tagger service timeout - CPU-only AI processing exceeded time limit")
                     
             except asyncio.CancelledError:
                 logger.error(f"🚫 Request cancelled on attempt {attempt + 1}")
