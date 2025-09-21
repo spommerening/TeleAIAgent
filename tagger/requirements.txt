@@ -4,7 +4,6 @@ uvicorn[standard]==0.24.0
 
 # Async HTTP Client
 aiohttp==3.10.10
-aiofiles==23.2.0
 
 # Image Processing
 pillow==10.0.1
@@ -13,21 +12,10 @@ pillow==10.0.1
 qdrant-client==1.11.0
 sentence-transformers==3.0.1
 
+# FastAPI File Upload Support
+python-multipart==0.0.6  # Required by FastAPI for UploadFile endpoints
+
 # PyTorch CPU-only (architecture-specific)
 # x86_64: torch==2.4.0+cpu (from PyTorch wheel index)
 # ARM64:  torch==2.4.0 (from PyPI)
 # Will be installed separately in Dockerfile with architecture detection
-
-# HTTP Client for Ollama
-httpx==0.25.2
-
-# Utilities
-python-multipart==0.0.6  # For file uploads
-python-dotenv==1.0.0  # For environment variables
-pydantic==2.5.0  # For data validation
-
-# System monitoring
-psutil==6.0.0
-
-# Date/time handling
-pytz==2024.2

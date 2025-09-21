@@ -3,7 +3,6 @@ aiogram==3.13.0
 
 # Text Processing
 markdown2==2.4.10
-pyttsx3==2.90
 
 # Async Web Requests
 aiohttp==3.10.10
@@ -12,25 +11,15 @@ aiofiles~=23.2.1
 # Image Processing
 Pillow==10.4.0
 
-# AI/ML Libraries
-openai==1.54.3
-langchain==0.3.7
-langchain-community==0.3.7
+# Vector Database
 qdrant-client==1.11.0
 # Note: PyTorch CPU-only and sentence-transformers are installed separately in Dockerfile
 # Architecture-specific installation:
 # x86_64: torch==2.4.0+cpu (optimized builds from PyTorch wheel index)
 # ARM64:  torch==2.4.0 (standard PyPI builds for ARM64 compatibility)
 
-# Web Scraping & Search
-duckduckgo-search==6.3.0
-beautifulsoup4==4.12.3
-
 # System Monitoring
 psutil==6.0.0
 
 # Timezone Handling
 pytz==2024.2
-
-# HTML Processing (already included in stdlib)
-# html - standard library
