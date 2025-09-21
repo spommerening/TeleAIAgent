@@ -30,56 +30,6 @@ class Config:
     # Embedding model for semantic search
     EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"  # CPU-optimized sentence transformer
     
-    # Enhanced image tagging configuration
-    IMAGE_TAGGING_PROMPT = """
-Du bist ein Experte für Bildanalyse. Analysiere dieses Bild sehr detailliert und erstelle hochwertige, beschreibende Tags in deutscher Sprache.
-
-ANALYSIERE diese Bereiche systematisch:
-🎯 HAUPTOBJEKTE: Was sind die Hauptelemente im Bild? (Personen, Tiere, Gegenstände)
-🎨 VISUELLE EIGENSCHAFTEN: Farben, Beleuchtung, Komposition, Stil, Qualität
-🌍 KONTEXT & SETTING: Wo spielt sich die Szene ab? (Innen/Außen, Tageszeit, Ort)
-💭 STIMMUNG & ATMOSPHÄRE: Welche Gefühle vermittelt das Bild?
-🎬 AKTIVITÄTEN & HANDLUNGEN: Was passiert im Bild?
-📸 TECHNISCHE ASPEKTE: Perspektive, Bildqualität, Aufnahmewinkel
-
-QUALITÄTSREGELN für Tags:
-- Sei spezifisch statt allgemein (z.B. "goldstündlicht" statt "licht")
-- Nutze beschreibende Adjektive (z.B. "flauschige-katze" statt "katze")
-- Erfasse Emotionen und Stimmung (z.B. "gemütlich", "melancholisch")
-- Beschreibe Farbnuancen (z.B. "warmes-orange", "kühles-blau")
-- Erfasse den Stil (z.B. "retro", "modern", "künstlerisch")
-
-BEISPIELE guter Tags:
-- Für eine Katze am Fenster: "entspannte-katze, warmes-sonnenlicht, gemütliche-wohnatmosphäre, nachmittagsstimmung, häusliche-geborgenheit"
-- Für eine Landschaft: "weitläufige-berglandschaft, dramatische-wolkenformation, goldene-stunde, erhabene-natur, panoramablick"
-
-Erstelle 8-12 präzise, beschreibende Tags als kommagetrennte Liste. Keine Erklärungen, nur die Tags.
-    """
-    
-    # Alternative prompts for multi-pass analysis
-    ARTISTIC_ANALYSIS_PROMPT = """
-Analysiere dieses Bild aus künstlerischer Sicht. Fokussiere auf:
-- Komposition und Bildaufbau
-- Farbharmonie und Beleuchtung  
-- Stil und Ästhetik
-- Künstlerische Techniken
-- Emotionale Wirkung
-
-Erstelle 5-7 Tags die diese künstlerischen Aspekte in deutscher Sprache beschreiben.
-Nur Tags als kommagetrennte Liste, keine Erklärungen.
-    """
-    
-    CONTEXTUAL_ANALYSIS_PROMPT = """
-Analysiere den Kontext und die Geschichte dieses Bildes:
-- Zeitlicher Kontext (Tageszeit, Jahreszeit, Epoche)
-- Sozialer/kultureller Kontext
-- Geografischer Kontext
-- Situativer Kontext (Was passiert hier?)
-- Zweck/Intention des Bildes
-
-Erstelle 5-7 kontextuelle Tags in deutscher Sprache als kommagetrennte Liste.
-    """
-    
     # File storage configuration
     IMAGES_BASE_DIR = "/app/images"
     IMAGES_VOLUME_DIR = "/app/volume_images"  # Mapped to docker volume
@@ -92,31 +42,6 @@ Erstelle 5-7 kontextuelle Tags in deutscher Sprache als kommagetrennte Liste.
     # Processing limits
     MAX_IMAGE_SIZE_MB = 10
     SUPPORTED_IMAGE_FORMATS = ["jpg", "jpeg", "png", "webp", "gif"]
-    
-    # Tag Quality Configuration
-    MIN_TAG_LENGTH = 3
-    MAX_TAG_LENGTH = 50
-    MIN_TAGS_COUNT = 5
-    MAX_TAGS_COUNT = 15
-    
-    # Generic tags to filter out (too common/not descriptive)
-    FILTER_GENERIC_TAGS = [
-        "bild", "foto", "image", "picture", "aufnahme", "digital", "farbe", "farbig",
-        "sichtbar", "erkennbar", "zeigt", "darstellung", "abbildung", "zu-sehen",
-        "vorhanden", "existiert", "da", "hier", "dort", "gut", "schön", "normal"
-    ]
-    
-    # Tag categories for better organization
-    TAG_CATEGORIES = {
-        "objects": ["person", "tier", "gebäude", "fahrzeug", "möbel", "pflanze", "essen", "kleidung"],
-        "colors": ["rot", "blau", "grün", "gelb", "orange", "lila", "rosa", "schwarz", "weiß", "grau", "braun"],
-        "moods": ["fröhlich", "traurig", "friedlich", "aufregend", "gemütlich", "dramatisch", "romantisch", "melancholisch"],
-        "settings": ["innen", "außen", "natur", "stadt", "haus", "büro", "strand", "wald", "berg", "wasser"],
-        "actions": ["laufen", "sitzen", "stehen", "spielen", "arbeiten", "schlafen", "essen", "lächeln", "schauen"],
-        "technical": ["nahaufnahme", "weitwinkel", "portrait", "landschaft", "makro", "lowlight", "gegenlicht", "bokeh"],
-        "time": ["morgen", "mittag", "abend", "nacht", "sommer", "winter", "frühling", "herbst", "goldstunde"],
-        "style": ["vintage", "modern", "klassisch", "künstlerisch", "minimalistisch", "abstrakt", "realistisch"]
-    }
     
     # Enhanced model configuration
     PRIMARY_VISION_MODEL = "llava:7b"  # Better vision model
