@@ -23,15 +23,20 @@ class OllamaClient:
         self.base_url = Config.OLLAMA_URL
         self.api_url = f"{self.base_url}/api/generate"
         self.chat_url = f"{self.base_url}/api/chat"
-        self.primary_model = getattr(Config, 'PRIMARY_VISION_MODEL', Config.OLLAMA_MODEL)
-        self.fallback_model = getattr(Config, 'FALLBACK_VISION_MODEL', 'llava:7b')
+        
+        # Get clean model configuration
+        model_config = Config.get_vision_model_config()
+        self.primary_model = model_config['primary_model']
+        self.fallback_model = model_config['fallback_model']
+        self.emergency_fallback = model_config['emergency_fallback']
+        
         self.active_model = None
         self.session: Optional[aiohttp.ClientSession] = None
         self.initialized = False
         
     async def initialize(self):
         """Initialize the Ollama client and ensure model is available"""
-        logger.info(f"🔧 Initializing Ollama client, primary_model={self.primary_model}, fallback_model={self.fallback_model}, url={self.base_url}")
+        logger.info(f"🔧 Initializing Ollama client with model chain: {self.primary_model} → {self.fallback_model} → {self.emergency_fallback}, url={self.base_url}")
         
         # Create HTTP session
         timeout = aiohttp.ClientTimeout(total=300)  # 5 minutes for model downloads
@@ -52,8 +57,9 @@ class OllamaClient:
             raise
             
     async def _ensure_model_available(self):
-        """Ensure the best available model is ready, with fallback support"""
-        logger.info(f"🔍 Checking model availability, primary={self.primary_model}, fallback={self.fallback_model}")
+        """Ensure the best available model is ready, with intelligent fallback chain"""
+        models_to_try = [self.primary_model, self.fallback_model, self.emergency_fallback]
+        logger.info(f"🔍 Checking model availability in order: {models_to_try}")
         
         try:
             # List available models
@@ -62,20 +68,16 @@ class OllamaClient:
                     models_data = await response.json()
                     available_models = [model['name'] for model in models_data.get('models', [])]
                     
-                    # Try primary model first
-                    if self.primary_model in available_models:
-                        self.active_model = self.primary_model
-                        logger.info(f"✅ Using primary vision model: {self.active_model}")
-                        return
+                    # Try models in order of preference
+                    for i, model in enumerate(models_to_try):
+                        if model in available_models:
+                            self.active_model = model
+                            status = "✅ primary" if i == 0 else f"⚠️ {'fallback' if i == 1 else 'emergency'}"
+                            logger.info(f"{status} vision model available: {self.active_model}")
+                            return
                     
-                    # Check if fallback is available
-                    if self.fallback_model in available_models:
-                        self.active_model = self.fallback_model
-                        logger.info(f"⚠️ Primary model not available, using fallback: {self.active_model}")
-                        return
-                    
-            # Try to pull primary model
-            logger.info(f"📥 Primary model not found, attempting to pull: {self.primary_model}")
+            # Try to pull primary model as last resort
+            logger.info(f"📥 No vision models available, attempting to pull primary: {self.primary_model}")
             
             pull_data = {"name": self.primary_model}
             async with self.session.post(f"{self.base_url}/api/pull", json=pull_data) as response:

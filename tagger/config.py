@@ -13,13 +13,9 @@ class Config:
     SERVICE_HOST = "0.0.0.0"
     SERVICE_PORT = 7777
     
-    # Ollama configuration (inherited from teleaiagent)
+    # Ollama configuration
     OLLAMA_URL = "http://ollama:11434"
     OLLAMA_API_URL = "http://ollama:11434/api/chat"
-    # OLLAMA_MODEL = "gemma3n:e2b"  # Same as teleaiagent
-    # OLLAMA_MODEL = "llava:7b"  # Better vision model
-    OLLAMA_MODEL = "llava-llama3:8b-v1.1-q4_0"  # Better vision model with Llama 3
-    # OLLAMA_MODEL = "llava-llama3:13b-v1.1-q4_0"  # Uncomment for better results, requires more RAM
     OLLAMA_TEMPERATURE = 0.7
     
     # Qdrant configuration (inherited from teleaiagent)
@@ -43,9 +39,33 @@ class Config:
     MAX_IMAGE_SIZE_MB = 10
     SUPPORTED_IMAGE_FORMATS = ["jpg", "jpeg", "png", "webp", "gif"]
     
-    # Enhanced model configuration
-    PRIMARY_VISION_MODEL = "llava:7b"  # Better vision model
-    FALLBACK_VISION_MODEL = "gemma3n:e2b"  # Fallback if primary not available
+    # Vision model configuration (ordered by preference)
+    # The system will try models in this order until one is available
+    VISION_MODELS = [
+        "llava-llama3:8b-v1.1-q4_0",  # Primary: Best quality, German support, ~5.5GB RAM
+        "llava:7b",                    # Fallback: Good quality, standard model, ~4GB RAM  
+        "gemma3n:e2b"                  # Emergency: Basic vision, minimal resources, ~2GB RAM
+    ]
+    
+    @classmethod
+    def get_vision_model_config(cls):
+        """
+        Get vision model configuration with intelligent fallback chain
+        
+        Strategy:
+        1. Try primary model (best quality & features)
+        2. Fallback to standard model (good compatibility)  
+        3. Emergency fallback (minimal resources)
+        4. If none available, attempt to pull primary model
+        
+        Returns:
+            Dict with model hierarchy for OllamaClient
+        """
+        return {
+            'primary_model': cls.VISION_MODELS[0],      # Best: llava-llama3:8b-v1.1-q4_0
+            'fallback_model': cls.VISION_MODELS[1],     # Good: llava:7b
+            'emergency_fallback': cls.VISION_MODELS[2]  # Basic: gemma3n:e2b
+        }
     
     # Create directories
     DIRECTORIES = [LOGS_DIR, IMAGES_BASE_DIR, IMAGES_VOLUME_DIR]
