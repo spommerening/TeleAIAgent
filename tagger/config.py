@@ -48,7 +48,7 @@ class Config:
     # Vision model configuration (ordered by preference)
     # The system will try models in this order until one is available
     VISION_MODELS = [
-        "llama3.2-vision:11b",  # Primary: Best quality, German support, ~5.5GB RAM
+        "llama3.2-vision:latest",  # Primary: Best quality, German support, ~5.5GB RAM
         "llava:7b",                    # Fallback: Good quality, standard model, ~4GB RAM  
         "gemma3n:e2b"                  # Emergency: Basic vision, minimal resources, ~2GB RAM
     ]
