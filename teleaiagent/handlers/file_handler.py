@@ -13,7 +13,7 @@ import asyncio
 from collections import deque
 from PIL import Image
 from config import Config
-from utils.tagger_client import TaggerClient
+from utils.vision_client import VisionClient
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +21,8 @@ class FileHandler:
     def __init__(self, bot):
         self.bot = bot
         self.bot_token = Config.BOT_TOKEN
-        self.tagger_client = TaggerClient()
-        
+        self.vision_client = VisionClient()
+
         # Global image processing queue (FIFO)
         self._image_queue = asyncio.Queue()
         self._queue_processor = None
@@ -33,16 +33,16 @@ class FileHandler:
         }
         
     async def initialize(self):
-        """Initialize tagger client and start global queue processor"""
-        await self.tagger_client.initialize()
-        
-        # Check if tagger service is available
-        is_healthy = await self.tagger_client.health_check()
+        """Initialize vision client and start global queue processor"""
+        await self.vision_client.initialize()
+
+        # Check if vision service is available
+        is_healthy = await self.vision_client.health_check()
         if is_healthy:
-            logger.info("✅ Tagger service is healthy and ready")
+            logger.info("✅ Vision service is healthy and ready")
         else:
-            logger.warning("⚠️ Tagger service is not responding - images will be processed without tagging")
-        
+            logger.warning("⚠️ Vision service is not responding - images will be processed without tagging")
+
         # Start global queue processor
         self._queue_processor = asyncio.create_task(self._process_image_queue())
         logger.info("🔄 Global image processing queue started")
@@ -68,9 +68,9 @@ class FileHandler:
         
         try:
             # Quick health check before queuing
-            is_healthy = await self.tagger_client.health_check()
+            is_healthy = await self.vision_client.health_check()
             if not is_healthy:
-                logger.warning("⚠️ Tagger service is not healthy, rejecting image")
+                logger.warning("⚠️ Vision service is not healthy, rejecting image")
                 await message.reply("❌ Bildverarbeitungsservice ist derzeit nicht verfügbar. Bitte versuche es später noch einmal.")
                 return
             
@@ -160,8 +160,8 @@ class FileHandler:
             queue_wait = time.time() - task['queued_at']
             processing_msg = await message.reply(f"🤖 Analysiere Bild...\n⏱️ Wartezeit: {queue_wait:.0f}s")
             
-            # Send to tagger service for processing
-            result = await self.tagger_client.process_image(
+            # Send to vision service for processing
+            result = await self.vision_client.process_image(
                 image_data=image_data,
                 telegram_metadata=metadata,
                 filename=filename
@@ -201,7 +201,7 @@ class FileHandler:
                     message_id=processing_msg.message_id,
                     text="❌ Bildverarbeitung fehlgeschlagen. Bitte versuche es noch einmal."
                 )
-                logger.warning("⚠️ Tagger service failed to process image")
+                logger.warning("⚠️ Vision service failed to process image")
             
         except Exception as e:
             logger.error(f"❌ Error processing single image task: {e}", exc_info=True)
@@ -272,7 +272,7 @@ class FileHandler:
             await self._download_file(download_url, file_path)
     
     async def _download_image_data(self, download_url):
-        """Download image data and return bytes (for tagger service)"""
+        """Download image data and return bytes (for vision service)"""
         async with aiohttp.ClientSession() as session:
             try:
                 async with session.get(download_url) as response:
@@ -319,7 +319,7 @@ class FileHandler:
             return image_data
 
     def _extract_telegram_metadata(self, message, file_info, file_id):
-        """Extract Telegram message metadata for tagger service"""
+        """Extract Telegram message metadata for vision service"""
         # Handle aiogram datetime object
         if hasattr(message.date, 'strftime'):  # It's already a datetime object
             timestamp_str = message.date.strftime('%Y-%m-%d %H:%M:%S')

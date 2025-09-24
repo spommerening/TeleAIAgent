@@ -142,6 +142,54 @@ async def health_check():
         return {"status": "unhealthy", "details": health_status, "error": str(e)}
 
 
+@app.post("/tag-image")
+async def tag_image(
+    image: UploadFile = File(...),
+    telegram_metadata: str = Form(...)
+):
+    """
+    Main endpoint to receive image and Telegram metadata from teleaiagent
+    
+    Args:
+        image: The image file to process
+        telegram_metadata: JSON string containing Telegram message metadata
+        
+    Returns:
+        JSON response with processing results
+    """
+    logger.info(f"📸 Received image tagging request - filename: {image.filename}, content_type: {image.content_type}")
+    
+    try:
+        # Validate image
+        if not image.content_type or not image.content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="File must be an image")
+            
+        # Check file size
+        image_data = await image.read()
+        if len(image_data) > Config.MAX_IMAGE_SIZE_MB * 1024 * 1024:
+            raise HTTPException(
+                status_code=413, 
+                detail=f"Image too large. Maximum size: {Config.MAX_IMAGE_SIZE_MB}MB"
+            )
+        
+        # Process image with handler
+        result = await image_handler.process_image(image_data, telegram_metadata)
+        
+        logger.info(f"✅ Image processing completed successfully - description: {result.get('description', '')[:50]}..., storage_path: {result.get('storage_path')}")
+        
+        return JSONResponse(content={
+            "status": "success",
+            "message": "Image processed and tagged successfully",
+            "result": result
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Image processing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
 @app.get("/stats")
 async def get_stats():
     """Get service statistics"""

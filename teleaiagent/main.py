@@ -186,7 +186,7 @@ System is operational! 🚀
         # Initialize AI client
         await self.text_handler.ai_client.initialize()
         
-        # Initialize file handler (for tagger client)
+        # Initialize file handler (for vision client)
         await self.file_handler.initialize()
         
         # Start monitoring
@@ -204,11 +204,11 @@ System is operational! 🚀
         """Gracefully shuts down the bot"""
         logger.info("Bot shutting down...")
         await self.monitor.stop_monitoring()
-        
-        # Close tagger client connection
-        if hasattr(self.file_handler, 'tagger_client'):
-            await self.file_handler.tagger_client.close()
-            
+
+        # Close vision client connection
+        if hasattr(self.file_handler, 'vision_client'):
+            await self.file_handler.vision_client.close()
+
         await self.bot.session.close()
         logger.info("Bot successfully shut down")
 
