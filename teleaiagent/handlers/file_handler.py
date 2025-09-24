@@ -175,8 +175,11 @@ class FileHandler:
                 # Calculate total processing time
                 total_time = time.time() - task['queued_at']
                 
+                # Sanitize description for Telegram markdown
+                safe_description = self._sanitize_markdown(description)
+                
                 # Format reply message with description
-                reply_text = f"📸 **Bildanalyse:**\n\n{description}"
+                reply_text = f"📸 **Bildanalyse:**\n\n{safe_description}"
                 
                 # Add quality and timing info
                 if quality_score > 0:
@@ -354,3 +357,20 @@ class FileHandler:
                         logger.error(f"Download failed. Status: {response.status}")
             except Exception as e:
                 logger.error(f"Download error: {e}")
+
+    def _sanitize_markdown(self, text: str) -> str:
+        """
+        Sanitize text for Telegram markdown parsing by escaping problematic characters
+        """
+        if not text:
+            return text
+            
+        # Characters that can cause Telegram markdown parsing issues
+        problematic_chars = ['*', '_', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+        
+        # Escape problematic characters
+        safe_text = text
+        for char in problematic_chars:
+            safe_text = safe_text.replace(char, f'\\{char}')
+            
+        return safe_text

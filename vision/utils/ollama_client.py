@@ -144,11 +144,11 @@ class OllamaClient:
                 "images": [image_b64],
                 "stream": False,
                 "options": {
-                    "temperature": 0.3,     # Lower temperature for more focused responses
-                    "num_predict": 150,     # Allow enough tokens for 3 complete sentences
-                    "top_p": 0.8,          # More focused responses
-                    "repeat_penalty": 1.2,  # Reduce repetition more aggressively
-                    "stop": ["4.", "\n4", "Sentence 4", "Additionally", "Furthermore", "Moreover", "The image also"]  # Hard stops
+                    "temperature": 0.1,     # Very low temperature for consistent, controlled responses
+                    "num_predict": 80,      # Strict token limit for exactly 3 sentences
+                    "top_p": 0.6,          # Very focused responses
+                    "repeat_penalty": 1.4,  # High penalty to reduce repetition and verbosity
+                    "stop": ["4.", "4 ", "\n4", "sentence 4", "Sentence 4", "Additionally", "Furthermore", "Moreover", "Also,", "In addition", "The image also", "Overall,", "Finally,"]  # Comprehensive stops
                 }
             }
             
@@ -253,9 +253,12 @@ class OllamaClient:
         
         # Single comprehensive prompt for detailed German description
         comprehensive_prompt = """
-Describe this image in exactly 3 short sentences. Format: 1. [First sentence] 2. [Second sentence] 3. [Third sentence]
+Describe this image in EXACTLY 3 sentences. Use this format:
+1. [Main subject and action]
+2. [Setting and environment] 
+3. [Key details or mood]
 
-Focus only on: main subject, setting, and most notable visual elements. Be concise and stop after sentence 3.
+STOP after sentence 3. Do not write more than 3 sentences.
 """
         
         try:

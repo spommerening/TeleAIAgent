@@ -81,7 +81,8 @@ class VisionClient:
                 async with self.session.post(f"{self.vision_url}/tag-image", data=data) as response:
                     if response.status == 200:
                         result = await response.json()
-                        logger.info(f"✅ Image processed by vision service - tags: {result.get('result', {}).get('tags', [])}, document_id: {result.get('result', {}).get('document_id')}")
+                        description = result.get('result', {}).get('description', 'No description available')[:50]
+                        logger.info(f"✅ Image processed by vision service - description: '{description}...', document_id: {result.get('result', {}).get('document_id')}")
                         return result
                     else:
                         error_text = await response.text()
