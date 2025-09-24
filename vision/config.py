@@ -1,15 +1,15 @@
 """
-Configuration Settings for Tagger Microservice
+Configuration Settings for Vision Microservice
 """
 
 import os
 from datetime import datetime
 
 class Config:
-    """Central configuration class for tagger service"""
+    """Central configuration class for vision service"""
     
     # Service configuration
-    SERVICE_NAME = "tagger"
+    SERVICE_NAME = "vision"
     SERVICE_HOST = "0.0.0.0"
     SERVICE_PORT = 7777
     
@@ -27,7 +27,7 @@ class Config:
     # Qdrant configuration (inherited from teleaiagent)
     QDRANT_HOST = "qdrant"
     QDRANT_PORT = 6333
-    QDRANT_COLLECTION_NAME = "image_tags"  # Separate collection for image tags
+    QDRANT_COLLECTION_NAME = "image_descriptions"  # Separate collection for image dockdescriptions
     
     # Embedding model for semantic search
     EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"  # CPU-optimized sentence transformer
@@ -48,9 +48,9 @@ class Config:
     # Vision model configuration (ordered by preference)
     # The system will try models in this order until one is available
     VISION_MODELS = [
-        "llama3.2-vision:latest",  # Primary: Best quality, German support, ~5.5GB RAM
-        "llava:7b",                    # Fallback: Good quality, standard model, ~4GB RAM  
-        "gemma3n:e2b"                  # Emergency: Basic vision, minimal resources, ~2GB RAM
+        "llama3.2-vision:11b",  # Primary: instruction-tuned image reasoning model, ~7GB RAM
+        "llava:7b",             # Fallback: Good quality, standard model, ~4GB RAM
+        "gemma3n:e2b"           # Emergency: Basic vision, minimal resources, ~2GB RAM
     ]
     
     @classmethod
@@ -68,9 +68,9 @@ class Config:
             Dict with model hierarchy for OllamaClient
         """
         return {
-            'primary_model': cls.VISION_MODELS[0],      # Best: llava-llama3:8b-v1.1-q4_0
-            'fallback_model': cls.VISION_MODELS[1],     # Good: llava:7b
-            'emergency_fallback': cls.VISION_MODELS[2]  # Basic: gemma3n:e2b
+            'primary_model': cls.VISION_MODELS[0],
+            'fallback_model': cls.VISION_MODELS[1],
+            'emergency_fallback': cls.VISION_MODELS[2]
         }
     
     # Create directories

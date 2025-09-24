@@ -1,1 +1,0 @@
-# Tagger microservice handlers package

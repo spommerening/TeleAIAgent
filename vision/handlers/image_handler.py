@@ -1,5 +1,5 @@
 """
-Image Handler for Tagger Service
+Image Handler for Vision Service
 Coordinates image processing workflow: analysis, description generation, storage, and Qdrant indexing
 """
 

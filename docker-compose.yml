@@ -23,7 +23,7 @@ services:
       - mynetwork
     restart: unless-stopped
     depends_on:
-      - tagger
+      - vision
     # Resource limits for CPU-only operation
     deploy:
       resources:
@@ -37,19 +37,19 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  tagger:
+  vision:
     build:
       context: .
-      dockerfile: Dockerfile-tagger
-    container_name: tagger
+      dockerfile: Dockerfile-vision
+    container_name: vision
     env_file:
       - .env
     ports:
       - "7777:7777"  # Expose tagger API port
     volumes:
       - ./volumes/images:/app/volume_images  # Shared volume for image storage
-      - ./volumes/tagger/logs:/app/logs  # Separate logs for tagger
-      - ./volumes/tagger/cache:/root/.cache  # Separate cache for tagger
+      - ./volumes/vision/logs:/app/logs  # Separate logs for vision
+      - ./volumes/vision/cache:/root/.cache  # Separate cache for vision
     networks:
       - mynetwork
     restart: unless-stopped
@@ -99,10 +99,8 @@ services:
       resources:
         limits:
           memory: 14G                 # 16GB system: generous memory limit
-          cpus: '4.0'                 # Use all available cores
         reservations:
           memory: 6G                  # 16GB system: adequate reservation
-          cpus: '2.0'                 # Minimum 2 cores
     privileged: false
     security_opt:
       - no-new-privileges:true

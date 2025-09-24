@@ -1,6 +1,6 @@
 """
-FastAPI Tagger Microservice
-Main entry point for the image tagging service
+FastAPI Vision Microservice
+Main entry point for the image vision service
 """
 
 import asyncio
@@ -52,7 +52,7 @@ async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown"""
     global ollama_client, qdrant_manager, file_manager, image_handler
     
-    logger.info("🚀 Starting Tagger microservice...")
+    logger.info("🚀 Starting Vision microservice...")
     
     try:
         # Initialize service managers
@@ -67,29 +67,29 @@ async def lifespan(app: FastAPI):
         await ollama_client.initialize()
         await qdrant_manager.initialize()
         
-        logger.info("✅ Tagger service initialized successfully")
+        logger.info("✅ Vision service initialized successfully")
         
         yield  # Service is running
         
     except Exception as e:
-        logger.error(f"❌ Failed to initialize tagger service: {str(e)}")
+        logger.error(f"❌ Failed to initialize vision service: {str(e)}")
         raise
     finally:
         # Cleanup
-        logger.info("🔄 Shutting down tagger service...")
-        
+        logger.info("🔄 Shutting down vision service...")
+
         if ollama_client:
             await ollama_client.close()
         if qdrant_manager:
             await qdrant_manager.close()
-            
-        logger.info("✅ Tagger service shut down complete")
+
+        logger.info("✅ Vision service shut down complete")
 
 
 # Create FastAPI app with lifespan
 app = FastAPI(
-    title="Image Tagger Microservice",
-    description="Microservice for AI-powered image tagging with Ollama and Qdrant integration",
+    title="Image Vision Microservice",
+    description="Microservice for AI-powered image vision with Ollama and Qdrant integration",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -98,7 +98,7 @@ app = FastAPI(
 @app.get("/")
 async def root():
     """Health check endpoint"""
-    return {"message": "Image Tagger Microservice", "status": "running", "version": "1.0.0"}
+    return {"message": "Image Vision Microservice", "status": "running", "version": "1.0.0"}
 
 
 @app.get("/health")
@@ -140,54 +140,6 @@ async def health_check():
         logger.error(f"Health check failed: {str(e)}")
         health_status["service"] = "unhealthy"
         return {"status": "unhealthy", "details": health_status, "error": str(e)}
-
-
-@app.post("/tag-image")
-async def tag_image(
-    image: UploadFile = File(...),
-    telegram_metadata: str = Form(...)
-):
-    """
-    Main endpoint to receive image and Telegram metadata from teleaiagent
-    
-    Args:
-        image: The image file to process
-        telegram_metadata: JSON string containing Telegram message metadata
-        
-    Returns:
-        JSON response with processing results
-    """
-    logger.info(f"📸 Received image tagging request - filename: {image.filename}, content_type: {image.content_type}")
-    
-    try:
-        # Validate image
-        if not image.content_type or not image.content_type.startswith('image/'):
-            raise HTTPException(status_code=400, detail="File must be an image")
-            
-        # Check file size
-        image_data = await image.read()
-        if len(image_data) > Config.MAX_IMAGE_SIZE_MB * 1024 * 1024:
-            raise HTTPException(
-                status_code=413, 
-                detail=f"Image too large. Maximum size: {Config.MAX_IMAGE_SIZE_MB}MB"
-            )
-        
-        # Process image with handler
-        result = await image_handler.process_image(image_data, telegram_metadata)
-        
-        logger.info(f"✅ Image processing completed successfully - description: {result.get('description', '')[:50]}..., storage_path: {result.get('storage_path')}")
-        
-        return JSONResponse(content={
-            "status": "success",
-            "message": "Image processed and tagged successfully",
-            "result": result
-        })
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ Image processing failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @app.get("/stats")
@@ -252,7 +204,7 @@ def main():
     # Configure basic logging for uvicorn
     logging.basicConfig(level=getattr(logging, Config.LOG_LEVEL))
     
-    logger.info(f"🚀 Starting Image Tagger Microservice on {Config.SERVICE_HOST}:{Config.SERVICE_PORT}")
+    logger.info(f"🚀 Starting Image Vision Microservice on {Config.SERVICE_HOST}:{Config.SERVICE_PORT}")
     
     # Run the FastAPI app with uvicorn
     uvicorn.run(

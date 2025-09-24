@@ -1,6 +1,6 @@
 """
 Ollama Client for Image Analysis
-Handles communication with Ollama service for image tagging
+Handles communication with Ollama service for image vision
 """
 
 import asyncio
@@ -144,10 +144,11 @@ class OllamaClient:
                 "images": [image_b64],
                 "stream": False,
                 "options": {
-                    "temperature": 0.7,     # Balanced creativity for descriptions
-                    "num_predict": 300,     # Allow longer descriptions
-                    "top_p": 0.9,          # Slightly more focused responses
-                    "repeat_penalty": 1.1   # Reduce repetition
+                    "temperature": 0.3,     # Lower temperature for more focused responses
+                    "num_predict": 150,     # Allow enough tokens for 3 complete sentences
+                    "top_p": 0.8,          # More focused responses
+                    "repeat_penalty": 1.2,  # Reduce repetition more aggressively
+                    "stop": ["4.", "\n4", "Sentence 4", "Additionally", "Furthermore", "Moreover", "The image also"]  # Hard stops
                 }
             }
             
@@ -251,15 +252,11 @@ class OllamaClient:
         logger.info(f"🔍 Generating comprehensive image description with model: {self.active_model}")
         
         # Single comprehensive prompt for detailed German description
-        comprehensive_prompt = """Analysiere dieses Bild und gib eine detaillierte Beschreibung auf Deutsch, die folgende Aspekte umfasst:
-- Welche Objekte, Personen oder Motive sind sichtbar
-- Die Umgebung, der Ort oder die Atmosphäre
-- Farben, Beleuchtung und visueller Stil
-- Stimmung, Atmosphäre oder emotionaler Ton
-- Bemerkenswerte Aktivitäten oder Interaktionen
-- Technische Aspekte wie Komposition oder Perspektive
+        comprehensive_prompt = """
+Describe this image in exactly 3 short sentences. Format: 1. [First sentence] 2. [Second sentence] 3. [Third sentence]
 
-Gib eine umfassende, natürliche Beschreibung in 2-4 Sätzen auf Deutsch, die das Wesen des Bildes einfängt."""
+Focus only on: main subject, setting, and most notable visual elements. Be concise and stop after sentence 3.
+"""
         
         try:
             description = await self.analyze_image(image_data, comprehensive_prompt)

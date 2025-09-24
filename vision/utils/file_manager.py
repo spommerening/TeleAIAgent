@@ -1,5 +1,5 @@
 """
-File Manager for Tagger Service
+File Manager for Vision Service
 Handles file system operations including year/month/day directory structure
 """
 

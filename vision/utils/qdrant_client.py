@@ -1,6 +1,6 @@
 """
-Qdrant Client for Tagger Service
-Handles vector database operations for storing image tags and metadata
+Qdrant Client for Vision Service
+Handles vector database operations for storing image vision descriptions and metadata
 """
 
 import asyncio
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class QdrantManager:
-    """Manages Qdrant vector database operations for image tags and metadata"""
+    """Manages Qdrant vector database operations for image vision descriptions and metadata"""
     
     def __init__(self):
         """Initialize Qdrant client and embedding model"""
