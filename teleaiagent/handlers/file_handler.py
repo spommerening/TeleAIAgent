@@ -171,6 +171,7 @@ class FileHandler:
                 # Extract description from result
                 description = result.get('result', {}).get('description', 'Keine Beschreibung verfügbar')
                 quality_score = result.get('result', {}).get('quality_score', 0)
+                model_used = result.get('result', {}).get('description_metadata', {}).get('model_used', 'unknown')
                 
                 # Calculate total processing time
                 total_time = time.time() - task['queued_at']
@@ -186,6 +187,7 @@ class FileHandler:
                     quality_emoji = "🟢" if quality_score > 0.7 else "🟡" if quality_score > 0.4 else "🔴"
                     reply_text += f"\n\n{quality_emoji} Qualität: {quality_score:.1%}"
                 
+                reply_text += f"\n🤖 Modell: {model_used}"
                 reply_text += f"\n⏱️ Gesamtzeit: {total_time:.0f}s"
                 
                 # Edit the processing message with the final result
