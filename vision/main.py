@@ -145,7 +145,8 @@ async def health_check():
 @app.post("/tag-image")
 async def tag_image(
     image: UploadFile = File(...),
-    telegram_metadata: str = Form(...)
+    telegram_metadata: str = Form(...),
+    model_override: str = Form(None)
 ):
     """
     Main endpoint to receive image and Telegram metadata from teleaiagent
@@ -153,11 +154,12 @@ async def tag_image(
     Args:
         image: The image file to process
         telegram_metadata: JSON string containing Telegram message metadata
+        model_override: Optional specific model to use for this image
         
     Returns:
         JSON response with processing results
     """
-    logger.info(f"📸 Received image tagging request - filename: {image.filename}, content_type: {image.content_type}")
+    logger.info(f"📸 Received image tagging request - filename: {image.filename}, content_type: {image.content_type}, model_override: {model_override}")
     
     try:
         # Validate image
@@ -173,7 +175,7 @@ async def tag_image(
             )
         
         # Process image with handler
-        result = await image_handler.process_image(image_data, telegram_metadata)
+        result = await image_handler.process_image(image_data, telegram_metadata, model_override=model_override)
         
         logger.info(f"✅ Image processing completed successfully - description: {result.get('description', '')[:50]}..., storage_path: {result.get('storage_path')}")
         

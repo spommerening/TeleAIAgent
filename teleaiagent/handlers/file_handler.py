@@ -14,6 +14,7 @@ from collections import deque
 from PIL import Image
 from config import Config
 from utils.vision_client import VisionClient
+from utils.settings_manager import SettingsManager
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ class FileHandler:
         self.bot = bot
         self.bot_token = Config.BOT_TOKEN
         self.vision_client = VisionClient()
+        self.settings_manager = SettingsManager()
 
         # Global image processing queue (FIFO)
         self._image_queue = asyncio.Queue()
@@ -33,7 +35,8 @@ class FileHandler:
         }
         
     async def initialize(self):
-        """Initialize vision client and start global queue processor"""
+        """Initialize vision client, settings manager and start global queue processor"""
+        await self.settings_manager.initialize()
         await self.vision_client.initialize()
 
         # Check if vision service is available
@@ -160,18 +163,26 @@ class FileHandler:
             queue_wait = time.time() - task['queued_at']
             processing_msg = await message.reply(f"🤖 Analysiere Bild...\n⏱️ Wartezeit: {queue_wait:.0f}s")
             
+            # Get channel's preferred vision model
+            preferred_model = await self.settings_manager.get_vision_model(message.chat.id)
+            logger.info(f"🔧 Using vision model for chat {message.chat.id}: {preferred_model}")
+            
             # Send to vision service for processing
             result = await self.vision_client.process_image(
                 image_data=image_data,
                 telegram_metadata=metadata,
-                filename=filename
+                filename=filename,
+                model_override=preferred_model
             )
             
             if result and result.get('status') == 'success':
                 # Extract description from result
                 description = result.get('result', {}).get('description', 'Keine Beschreibung verfügbar')
                 quality_score = result.get('result', {}).get('quality_score', 0)
-                model_used = result.get('result', {}).get('description_metadata', {}).get('model_used', 'unknown')
+                
+                # Get model information from the correct location
+                model_info = result.get('result', {}).get('model_info', {})
+                model_used = model_info.get('model_used', 'unknown')
                 
                 # Calculate total processing time
                 total_time = time.time() - task['queued_at']

@@ -1,0 +1,8 @@
+# Settings Directory
+
+This directory stores the SQLite database file for channel-specific settings.
+
+Files:
+- `settings.db` - SQLite database (created automatically)
+
+The database is shared between teleaiagent and tagger services via Docker volume mount.

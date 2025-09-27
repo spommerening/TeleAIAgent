@@ -46,6 +46,7 @@ class VisionClient:
         image_data: bytes,
         telegram_metadata: Dict,
         filename: str = "image.jpg",
+        model_override: str = None,
         max_retries: int = 1
     ) -> Optional[Dict]:
         """
@@ -56,6 +57,7 @@ class VisionClient:
             image_data: Raw image bytes
             telegram_metadata: Metadata from Telegram message
             filename: Original filename
+            model_override: Specific model to use for this image (optional)
             max_retries: Maximum number of retry attempts (default: 1 for 10-min operations)
             
         Returns:
@@ -65,7 +67,7 @@ class VisionClient:
             logger.error("❌ Vision client not initialized")
             return None
 
-        logger.info(f"📤 Sending image to vision service, filename={filename}, size_bytes={len(image_data)}, chat_id={telegram_metadata.get('chat_id')}")
+        logger.info(f"📤 Sending image to vision service, filename={filename}, size_bytes={len(image_data)}, chat_id={telegram_metadata.get('chat_id')}, model={model_override or 'default'}")
 
         for attempt in range(max_retries + 1):
             try:
@@ -76,6 +78,10 @@ class VisionClient:
                               filename=filename,
                               content_type='image/jpeg')
                 data.add_field('telegram_metadata', json.dumps(telegram_metadata))
+                
+                # Add model override if specified
+                if model_override:
+                    data.add_field('model_override', model_override)
                 
                 # Send request to vision service
                 async with self.session.post(f"{self.vision_url}/tag-image", data=data) as response:

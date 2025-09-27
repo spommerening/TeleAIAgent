@@ -1,6 +1,9 @@
 # Telegram Bot (AsyncIO)
 aiogram==3.13.0
 
+# Database (AsyncIO SQLite)
+aiosqlite==0.20.0
+
 # Text Processing
 markdown2==2.4.10
 

@@ -14,6 +14,7 @@ from aiogram.filters import Command
 from config import Config
 from handlers.text_handler import TextHandler
 from handlers.file_handler import FileHandler
+from handlers.settings_handler import SettingsHandler
 from utils.monitoring import SystemMonitor
 
 # Configure logging
@@ -47,6 +48,7 @@ class AsyncTelegramBot:
         self.dp = Dispatcher()
         self.text_handler = TextHandler(self.bot)
         self.file_handler = FileHandler(self.bot)
+        self.settings_handler = SettingsHandler(self.bot)
         self.monitor = SystemMonitor()
         self._setup_handlers()
         self._setup_signal_handlers()
@@ -125,6 +127,22 @@ System is operational! 🚀
             except Exception as e:
                 logger.error(f"Error in status command handler: {e}", exc_info=True)
 
+        @self.dp.message(Command("settings"))
+        async def handle_settings_command(message: Message):
+            try:
+                await self.settings_handler.handle_settings_command(message)
+                logger.info(f"Settings command handled for user {message.from_user.id}")
+            except Exception as e:
+                logger.error(f"Error in settings command handler: {e}", exc_info=True)
+
+        # Settings callback handler
+        @self.dp.callback_query(lambda c: c.data.startswith("settings|"))
+        async def handle_settings_callback(callback):
+            try:
+                await self.settings_handler.handle_settings_callback(callback)
+            except Exception as e:
+                logger.error(f"Error in settings callback handler: {e}", exc_info=True)
+
         # Photo handlers
         @self.dp.message(lambda message: message.photo)
         async def handle_photos(message: Message):
@@ -188,6 +206,9 @@ System is operational! 🚀
         
         # Initialize file handler (for vision client)
         await self.file_handler.initialize()
+        
+        # Initialize settings handler
+        await self.settings_handler.initialize()
         
         # Start monitoring
         await self.monitor.start_monitoring()

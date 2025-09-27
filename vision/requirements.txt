@@ -2,6 +2,9 @@
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 
+# Database (AsyncIO SQLite)
+aiosqlite==0.20.0
+
 # Async HTTP Client
 aiohttp==3.10.10
 

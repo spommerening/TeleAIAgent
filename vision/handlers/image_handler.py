@@ -32,7 +32,8 @@ class ImageHandler:
     async def process_image(self, 
                           image_data: bytes, 
                           telegram_metadata: str,
-                          filename: str = None) -> Dict:
+                          filename: str = None,
+                          model_override: str = None) -> Dict:
         """
         Process an image through the simplified workflow with description generation
         
@@ -40,6 +41,7 @@ class ImageHandler:
             image_data: Raw image bytes
             telegram_metadata: JSON string with Telegram message metadata
             filename: Optional original filename
+            model_override: Optional specific model to use for this image
             
         Returns:
             Dict with processing results including document_id, storage_path, and description
@@ -52,13 +54,13 @@ class ImageHandler:
                 logger.error(f"❌ Invalid JSON in telegram_metadata: {str(e)}")
                 raise HTTPException(status_code=400, detail="Invalid telegram_metadata JSON")
             
-            logger.info(f"🚀 Starting image description workflow, chat_id={metadata.get('chat_id')}, user_name={metadata.get('user_name')}, message_id={metadata.get('message_id')}")
+            logger.info(f"🚀 Starting image description workflow, chat_id={metadata.get('chat_id')}, user_name={metadata.get('user_name')}, message_id={metadata.get('message_id')}, model_override={model_override}")
             
             # Step 1: Generate comprehensive image description
             logger.info("🤖 Step 1: Generating image description with Ollama...")
             
-            # Generate single comprehensive description
-            description_result = await self.ollama_client.generate_image_description(image_data)
+            # Generate single comprehensive description with optional model override
+            description_result = await self.ollama_client.generate_image_description(image_data, model_override=model_override)
             raw_description = description_result['description']
             
             # Process and validate description

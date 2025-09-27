@@ -109,13 +109,14 @@ class OllamaClient:
             self.active_model = self.fallback_model
             logger.info(f"🔄 Defaulting to fallback model: {self.active_model}")
             
-    async def analyze_image(self, image_data: bytes, prompt: Optional[str] = None) -> str:
+    async def analyze_image(self, image_data: bytes, prompt: Optional[str] = None, model_override: str = None) -> str:
         """
         Analyze image and generate a comprehensive description using Ollama with health checks
         
         Args:
             image_data: Raw image bytes
             prompt: Optional custom prompt (uses default if not provided)
+            model_override: Optional specific model to use instead of active_model
             
         Returns:
             String with comprehensive image description
@@ -126,8 +127,11 @@ class OllamaClient:
         # Use default German description prompt if none provided
         if prompt is None:
             prompt = "Beschreibe dieses Bild detailliert auf Deutsch, einschließlich Objekten, Personen, Umgebung, Farben, Stimmung und bemerkenswerten Eigenschaften. Gib eine umfassende Beschreibung in 2-3 Sätzen."
-            
-        logger.info(f"🔍 Analyzing image with Ollama, model={self.active_model}, prompt_length={len(prompt)}")
+        
+        # Use model override if provided, otherwise use active model
+        model_to_use = model_override if model_override else (self.active_model or self.fallback_model)
+        
+        logger.info(f"🔍 Analyzing image with Ollama, model={model_to_use}, prompt_length={len(prompt)}, override={model_override is not None}")
         
         try:
             # Pre-flight health check
@@ -139,7 +143,7 @@ class OllamaClient:
             
             # Prepare request for vision model
             request_data = {
-                "model": self.active_model or self.fallback_model,
+                "model": model_to_use,
                 "prompt": prompt,
                 "images": [image_b64],
                 "stream": False,
@@ -236,20 +240,24 @@ class OllamaClient:
         finally:
             await inference_session.close()
     
-    async def generate_image_description(self, image_data: bytes) -> Dict:
+    async def generate_image_description(self, image_data: bytes, model_override: str = None) -> Dict:
         """
         Generate a comprehensive image description using a single optimized prompt
         
         Args:
             image_data: Raw image bytes
+            model_override: Optional specific model to use instead of active_model
             
         Returns:
             Dict with description and metadata
         """
         if not self.initialized or not self.session:
             raise Exception("Ollama client not initialized")
-            
-        logger.info(f"🔍 Generating comprehensive image description with model: {self.active_model}")
+        
+        # Use model override if provided, otherwise use active model
+        model_to_use = model_override if model_override else self.active_model
+        
+        logger.info(f"🔍 Generating comprehensive image description with model: {model_to_use} (override: {model_override is not None})")
         
         # Single comprehensive prompt for detailed German description
         comprehensive_prompt = """
@@ -262,20 +270,21 @@ STOP after sentence 3. Do not write more than 3 sentences.
 """
         
         try:
-            description = await self.analyze_image(image_data, comprehensive_prompt)
+            # Pass the specific model to analyze_image
+            description = await self.analyze_image(image_data, comprehensive_prompt, model_override=model_to_use)
             
             result = {
                 'description': description,
-                'model_used': self.active_model,
+                'model_used': model_to_use,
                 'analysis_type': 'comprehensive_description'
             }
             
-            logger.info(f"✅ Image description completed: {description[:100]}...")
+            logger.info(f"✅ Image description completed with {model_to_use}: {description[:100]}...")
             
             return result
             
         except Exception as e:
-            logger.error(f"❌ Image description generation failed: {str(e)}")
+            logger.error(f"❌ Image description generation failed with model {model_to_use}: {str(e)}")
             raise
             
 

@@ -19,6 +19,7 @@ services:
       - ./volumes/teleaiagent/videos:/app/videos
       - ./volumes/teleaiagent/voice:/app/voice
       - ./volumes/teleaiagent/logs:/app/logs
+      - ./volumes/settings:/app/data  # Shared settings database
     networks:
       - mynetwork
     restart: unless-stopped
@@ -50,6 +51,7 @@ services:
       - ./volumes/images:/app/volume_images  # Shared volume for image storage
       - ./volumes/vision/logs:/app/logs  # Separate logs for vision
       - ./volumes/vision/cache:/root/.cache  # Separate cache for vision
+      - ./volumes/settings:/app/data  # Shared settings database
     networks:
       - mynetwork
     restart: unless-stopped
